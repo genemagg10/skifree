@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkiFree</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #1a1a2e;
+            font-family: 'Courier New', monospace;
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #gameCanvas {
+            border: 4px solid #333;
+            cursor: none;
+            image-rendering: pixelated;
+        }
+
+        .info {
+            color: #fff;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .info h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+            color: #87CEEB;
+        }
+
+        .controls {
+            color: #aaa;
+            font-size: 12px;
+        }
+
+        #score {
+            color: #FFD700;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="info">
+            <h1>SkiFree</h1>
+            <div id="score">Distance: 0m | Speed: 0</div>
+        </div>
+        <canvas id="gameCanvas" width="640" height="480"></canvas>
+        <div class="controls">
+            <p>🎮 Arrow Keys / WASD to steer | Mouse to aim | Space to jump | F to speed boost</p>
+            <p>⚠️ Watch out for the Yeti after 2000m!</p>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
