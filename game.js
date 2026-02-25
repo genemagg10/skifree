@@ -38,6 +38,8 @@ let baseSpeed = 5;
 let maxSpeed = 15;
 let jumpHeight = 0;
 let jumpVelocity = 0;
+let flipActive = false;
+let flipRotation = 0;
 
 // High score (persisted in localStorage)
 let highScore = parseInt(localStorage.getItem('frostbyte_highscore') || '0', 10);
@@ -421,6 +423,11 @@ function drawSkier() {
         }
         ctx.restore();
         return;
+    }
+
+    // ── Flip rotation (mid-air trick) ──────────────────────────────────────────
+    if (flipActive && jumpHeight > 0) {
+        ctx.rotate(flipRotation);
     }
 
     // ── Body rotation for turning ─────────────────────────────────────────────
@@ -1348,7 +1355,12 @@ function drawMobileButtons() {
 
     ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 12px "Orbitron", "Courier New", monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('JUMP', x, y);
+    if (gameState === 'jumping' && !flipActive) {
+        ctx.fillStyle = '#FFD700';
+        ctx.fillText('FLIP!', x, y);
+    } else {
+        ctx.fillText('JUMP', x, y);
+    }
     ctx.textBaseline = 'alphabetic';
 
     ctx.restore();
@@ -1406,7 +1418,19 @@ function update() {
     if (jumpHeight > 0 || jumpVelocity > 0) {
         jumpHeight += jumpVelocity;
         jumpVelocity -= 0.8;
-        if (jumpHeight <= 0) { jumpHeight = 0; jumpVelocity = 0; gameState = 'playing'; }
+        // Advance flip rotation
+        if (flipActive) {
+            flipRotation += Math.PI * 2 / 18; // full rotation over ~18 frames
+            if (flipRotation >= Math.PI * 2) {
+                flipRotation = 0;
+                flipActive = false;
+            }
+        }
+        if (jumpHeight <= 0) {
+            jumpHeight = 0; jumpVelocity = 0;
+            flipActive = false; flipRotation = 0;
+            gameState = 'playing';
+        }
     }
 
     // Horizontal movement
@@ -1666,6 +1690,7 @@ function resetGame() {
     distance = 0; speed = baseSpeed; difficulty = 0.25;
     skier.x = GAME_WIDTH / 2; skier.angle = 0;
     jumpHeight = 0; jumpVelocity = 0;
+    flipActive = false; flipRotation = 0;
     yeti.active = false; yeti.y = -200;
     yeti.retreatCooldown = 0;
     yeti.frozen = false; yeti.stunned = false;
@@ -1715,6 +1740,7 @@ document.addEventListener('keydown', e => {
         case ' ':
             if (gameState === 'crashed' || gameState === 'caught') { resetGame(); }
             else if (gameState === 'eating') { gameState = 'caught'; }
+            else if (gameState === 'jumping' && !flipActive) { flipActive = true; flipRotation = 0; }
             else if (heldPowerup) { usePowerup('forward'); }
             else { keys.space = true; }
             e.preventDefault(); break;
@@ -1799,7 +1825,11 @@ canvas.addEventListener('touchstart', e => {
     // Tap JUMP button area (bottom-left circle, center at 44, GAME_HEIGHT-38)
     const jdx = pos.x - 44, jdy = pos.y - (GAME_HEIGHT - 38);
     if (Math.sqrt(jdx*jdx + jdy*jdy) < 44) {
-        if (jumpHeight === 0) { jumpVelocity = 12; gameState = 'jumping'; }
+        if (gameState === 'jumping' && !flipActive) {
+            flipActive = true; flipRotation = 0;
+        } else if (jumpHeight === 0) {
+            jumpVelocity = 12; gameState = 'jumping';
+        }
         return;
     }
 
