@@ -7,10 +7,14 @@ const scoreDisplay = document.getElementById('score');
 const GAME_WIDTH = 640;
 const GAME_HEIGHT = 480;
 const SKIER_SIZE = 20;
-const TREE_SPAWN_RATE = 0.03;
-const ROCK_SPAWN_RATE = 0.015;
-const JUMP_SPAWN_RATE = 0.008;
+const TREE_SPAWN_RATE    = 0.026;   // base rates; multiplied by difficulty below
+const ROCK_SPAWN_RATE    = 0.012;
+const JUMP_SPAWN_RATE    = 0.007;
 const POWERUP_SPAWN_RATE = 0.004;
+
+// Difficulty ramp – goes from 0.25 → 1.0 over the first 1200 m
+// so new players get sparser terrain until they learn the controls
+let difficulty = 0.25;
 
 // Canvas scaling for responsive/mobile display
 let scale = 1;
@@ -103,7 +107,9 @@ function initObstacles() {
     obstacles = [];
     powerupPickups = [];
     powerupProjectiles = [];
-    for (let i = 0; i < 30; i++) {
+    difficulty = 0.25;
+    // Start with only 10 obstacles so the slope feels open at first
+    for (let i = 0; i < 10; i++) {
         spawnObstacle(Math.random() * GAME_HEIGHT + GAME_HEIGHT);
     }
 }
@@ -139,35 +145,114 @@ function spawnPowerup(y) {
 // ─── Drawing helpers ─────────────────────────────────────────────────────────
 
 function drawTree(x, y) {
-    ctx.fillStyle = '#228B22';
-    ctx.beginPath(); ctx.moveTo(x, y-35); ctx.lineTo(x-15, y-10); ctx.lineTo(x+15, y-10); ctx.closePath(); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(x, y-25); ctx.lineTo(x-18, y+5);  ctx.lineTo(x+18, y+5);  ctx.closePath(); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(x, y-15); ctx.lineTo(x-20, y+20); ctx.lineTo(x+20, y+20); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#8B4513'; ctx.fillRect(x-5, y+15, 10, 15);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(x-3, y-33, 6, 4);
-    ctx.fillRect(x-8, y-20, 5, 3);
-    ctx.fillRect(x+3, y-18, 5, 3);
+    // Pixel-art fir tree built from fillRect blocks only.
+    // (x,y) = centre of trunk base; tree grows upward.
+    const b = (dx, dy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(x+dx, y+dy, w, h); };
+
+    // ── Trunk ──────────────────────────────────────────────────────
+    b(-4, 8,  8, 16, '#5B2E0A');   // main bark
+    b(-3, 8,  3, 16, '#7A3D12');   // left highlight
+    b( 2, 9,  2, 14, '#3A1D06');   // right shadow
+
+    // ── Base foliage tier (widest) ─────────────────────────────────
+    b(-16, -4, 32, 13, '#155A18'); // dark back fill
+    b(-14, -4, 10,  8, '#1A7020'); // mid-left body
+    b( -2, -4, 10,  8, '#1A7020'); // mid-right body
+    b(  8, -2,  6, 10, '#0C3E0E'); // right shadow
+    b(-14, -4,  6,  2, '#FFFFFF'); // snow left
+    b(  2, -4,  6,  2, '#FFFFFF'); // snow right
+    b( -2, -4,  2,  2, '#E4E4E4'); // snow centre gap
+    b(-14, -4,  4,  4, '#22902C'); // lit highlight
+
+    // ── Middle tier ────────────────────────────────────────────────
+    b(-12,-16, 24, 13, '#166A1A');
+    b(-10,-16,  8,  8, '#1C8224');
+    b(  0,-16,  8,  8, '#1C8224');
+    b(  8,-14,  4, 10, '#0D4410');
+    b(-10,-16,  5,  2, '#FFFFFF'); // snow
+    b(  2,-16,  5,  2, '#FFFFFF');
+    b(-10,-16,  3,  4, '#23A22E'); // lit highlight
+
+    // ── Upper tier ─────────────────────────────────────────────────
+    b( -8,-28, 16, 13, '#178020');
+    b( -6,-28,  6,  7, '#1E9A28');
+    b(  1,-28,  5,  7, '#1E9A28');
+    b(  5,-26,  4, 10, '#0E5212');
+    b( -6,-28,  4,  2, '#FFFFFF'); // snow
+    b(  0,-28,  4,  2, '#FFFFFF');
+    b( -6,-28,  3,  4, '#27C033'); // lit highlight
+
+    // ── Tip ────────────────────────────────────────────────────────
+    b( -5,-39, 10, 12, '#199028');
+    b( -3,-39,  4,  8, '#21B232');
+    b(  2,-37,  2,  8, '#0F5E14');
+    b( -3,-39,  3,  2, '#FFFFFF'); // snow cap
+    b( -2,-41,  4,  2, '#FFFFFF');
+    b( -1,-43,  2,  2, '#FFFFFF'); // peak
 }
 
 function drawRock(x, y) {
-    ctx.fillStyle = '#696969';
-    ctx.beginPath(); ctx.ellipse(x, y, 15, 10, 0, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#808080';
-    ctx.beginPath(); ctx.ellipse(x-3, y-3, 8, 5, 0.3, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#FFFFFF';
-    ctx.beginPath(); ctx.ellipse(x+5, y-5, 4, 2, 0, 0, Math.PI*2); ctx.fill();
+    // Chunky pixel-art boulder built from fillRect.
+    const b = (dx, dy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(x+dx, y+dy, w, h); };
+
+    // Ground shadow
+    b(-12, 8, 26, 4, 'rgba(0,0,0,0.18)');
+
+    // Dark base outline
+    b(-12, -2, 26, 14, '#2E2E2E');
+
+    // Main body
+    b(-10, -6, 22, 16, '#555555');
+    b(-14, -2, 6,  10, '#555555');   // left bulge
+    b( 10, -2, 6,  10, '#555555');   // right bulge
+
+    // Mid highlight plane
+    b( -8, -6, 10,  8, '#6A6A6A');
+    b( -4, -8,  8,  4, '#787878');   // top face
+
+    // Bright highlight (upper left catch-light)
+    b( -8, -8,  6,  4, '#8C8C8C');
+    b( -6, -8,  4,  2, '#A0A0A0');
+
+    // Shadow underside / right
+    b(  6,  2, 10, 10, '#383838');
+    b( 10, -2,  4, 14, '#2A2A2A');
+
+    // Snow on top
+    b( -9, -9, 12,  3, '#F2F2F2');
+    b(-11, -7,  4,  2, '#FFFFFF');
+    b(  2, -8,  5,  2, '#E8E8E8');
+    b( -7,-11,  6,  2, '#FFFFFF');   // fresh snow peak
 }
 
 function drawJump(x, y) {
-    ctx.fillStyle = '#DEB887';
-    ctx.beginPath();
-    ctx.moveTo(x-20, y+5); ctx.lineTo(x-15, y-5);
-    ctx.lineTo(x+15, y-5); ctx.lineTo(x+20, y+5);
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = '#8B4513'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.fillStyle = 'rgba(0,0,0,0.2)';
-    ctx.beginPath(); ctx.ellipse(x, y+8, 18, 4, 0, 0, Math.PI*2); ctx.fill();
+    // Pixel-art snow ramp built from fillRect rows (stepped profile).
+    const b = (dx, dy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(x+dx, y+dy, w, h); };
+
+    // Shadow on snow
+    b(-22, 6, 44, 5, 'rgba(0,0,0,0.15)');
+
+    // Ramp surface – stacked rows, widening as we go down
+    b(-10, -8,  22, 3, '#C8B090');   // top row (narrower)
+    b(-13, -5,  28, 3, '#D4BC9A');
+    b(-16, -2,  34, 3, '#DEBFA0');
+    b(-20,  1,  40, 4, '#E8C8AA');   // bottom/widest
+
+    // Left edge (thick vertical face of ramp)
+    b(-20,  1,   4, 4, '#A8885A');
+    b(-16, -2,   4, 3, '#B09060');
+    b(-13, -5,   3, 3, '#B89468');
+    b(-10, -8,   2, 3, '#C0A070');
+
+    // Top highlight stripe
+    b( -8, -8,  18, 2, '#F0D8B8');
+
+    // Right shading
+    b( 16, -5,   4, 6, '#C0A878');
+
+    // Arrow markers on ramp surface (show it's a jump)
+    b( -2, -6,   4, 2, '#A07840');
+    b( -3, -3,   6, 2, '#A07840');
 }
 
 function drawPowerupPickup(p) {
@@ -191,53 +276,137 @@ function drawSkier() {
     ctx.save();
     ctx.translate(skier.x, skier.y - jumpHeight);
 
-    // Shield glow
+    // Shield glow ring
     if (shieldActive) {
         ctx.strokeStyle = `rgba(0,255,127,${0.5 + 0.5 * Math.sin(Date.now() / 100)})`;
         ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.arc(0, -10, 28, 0, Math.PI*2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, -10, 30, 0, Math.PI*2); ctx.stroke();
     }
 
-    // Jump shadow
+    // Jump shadow on snow below
     if (jumpHeight > 0) {
-        ctx.fillStyle = `rgba(0,0,0,${0.3 - jumpHeight / 200})`;
-        ctx.beginPath(); ctx.ellipse(0, jumpHeight + 10, 15 - jumpHeight/10, 5, 0, 0, Math.PI*2); ctx.fill();
+        const alpha = Math.max(0, 0.28 - jumpHeight / 180);
+        ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+        ctx.fillRect(-12 + jumpHeight/20, jumpHeight + 6, Math.max(4, 24 - jumpHeight/8), 4);
     }
 
+    // ── Crashed state ─────────────────────────────────────────────────────────
     if (gameState === 'crashed') {
-        ctx.fillStyle = '#FF0000'; ctx.fillRect(-15, -5, 30, 10);
-        ctx.fillStyle = '#FFE4C4'; ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = '#4169E1';
-        ctx.save(); ctx.rotate(0.5);  ctx.fillRect(-20, 10, 25, 4); ctx.restore();
-        ctx.save(); ctx.rotate(-0.3); ctx.fillRect(5,  15, 25, 4); ctx.restore();
-        ctx.restore(); return;
+        const b = (dx, dy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(dx, dy, w, h); };
+        // Sprawled body
+        b(-16, -6, 32,  8, '#1B52C0');   // jacket flat
+        b( -6, -8, 12,  6, '#FFCC88');   // face sideways
+        b( -4,-10,  8,  4, '#CC0000');   // hat above head
+        b( -3,-12,  6,  2, '#FFFFFF');   // pom pom
+        // Scattered skis
+        ctx.save(); ctx.rotate( 0.45); b(-18, 12, 26, 3, '#CC1100'); ctx.restore();
+        ctx.save(); ctx.rotate(-0.35); b(  4, 14, 26, 3, '#CC1100'); ctx.restore();
+        ctx.restore();
+        return;
     }
 
-    ctx.rotate(skier.angle * 0.4);
+    // ── Body rotation for turning ─────────────────────────────────────────────
+    ctx.rotate(skier.angle * 0.36);
 
-    // Skis
-    ctx.fillStyle = '#4169E1';
-    if (skier.angle === 0) {
-        ctx.fillRect(-8, 5, 4, 20); ctx.fillRect(4, 5, 4, 20);
+    const b = (dx, dy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(dx, dy, w, h); };
+    const ang = skier.angle;
+    const hardTurn = Math.abs(ang) > 1.0;
+
+    // ── SKI POLES ─────────────────────────────────────────────────────────────
+    // Draw behind body first.  Each pole is a row of 2×2 px dots.
+    const drawPole = (startX, startY, stepX, stepY, steps) => {
+        for (let i = 0; i < steps; i++) {
+            b(startX + i*stepX, startY + i*stepY, 2, 2, '#9B8B30');
+        }
+    };
+    // Left pole (visible unless hard-turning right)
+    if (ang <= 0.8) {
+        drawPole(-10, -8,  -2, 2, 9);   // shaft
+        b(-28, 9, 6, 2, '#B0B070');      // basket
+    }
+    // Right pole (visible unless hard-turning left)
+    if (ang >= -0.8) {
+        drawPole( 8, -8,  2, 2, 9);
+        b( 22, 9, 6, 2, '#B0B070');
+    }
+
+    // ── SKIS ─────────────────────────────────────────────────────────────────
+    if (!hardTurn) {
+        // Parallel skis pointing downhill
+        b(-12, 13, 2, 4, '#EE3311');   // left tip (raised, lighter)
+        b(-10, 15, 8, 2, '#CC1100');   // left ski
+        b(  2, 15, 8, 2, '#CC1100');   // right ski
+        b( 10, 13, 2, 4, '#EE3311');   // right tip
+        b( -9, 15, 2, 2, '#FF4422');   // binding highlight L
+        b(  3, 15, 2, 2, '#FF4422');   // binding highlight R
     } else {
-        ctx.save(); ctx.rotate(skier.angle * 0.1); ctx.fillRect(-10, 5, 20, 4); ctx.restore();
+        // Edging turn: skis appear foreshortened / angled
+        const dir = ang > 0 ? 1 : -1;
+        b(-10 * dir - 5, 14, 24, 2, '#CC1100');  // wide single ski strip
+        b(-10 * dir - 5, 12,  4, 4, '#EE3311');  // uphill tip
     }
 
-    // Body – orange when boosting
-    ctx.fillStyle = boostActive ? '#FF8C00' : '#FF4500';
-    ctx.fillRect(-6, -15, 12, 20);
+    // ── BOOTS ────────────────────────────────────────────────────────────────
+    b(-7, 9, 5, 6, '#1A1A30');   // left boot
+    b( 2, 9, 5, 6, '#1A1A30');   // right boot
+    b(-6, 9, 2, 3, '#2E2E50');   // boot highlight L
+    b( 3, 9, 2, 3, '#2E2E50');   // boot highlight R
 
-    // Head
-    ctx.fillStyle = '#FFE4C4'; ctx.beginPath(); ctx.arc(0, -20, 8, 0, Math.PI*2); ctx.fill();
+    // ── PANTS / LEGS ─────────────────────────────────────────────────────────
+    b(-6,  1, 4, 9, '#0B3484');
+    b( 2,  1, 4, 9, '#0B3484');
+    b(-5,  1, 2, 5, '#1448A8');   // highlight L
+    b( 3,  1, 2, 5, '#1448A8');   // highlight R
+    b(-6,  8, 4, 2, '#09286E');   // cuff shadow
+    b( 2,  8, 4, 2, '#09286E');
 
-    // Hat
-    ctx.fillStyle = '#1E90FF'; ctx.beginPath(); ctx.arc(0, -24, 6, Math.PI, 0); ctx.fill();
-    ctx.fillRect(-6, -26, 12, 4);
+    // ── JACKET ───────────────────────────────────────────────────────────────
+    const jMain = boostActive ? '#D06000' : '#1B52C0';
+    const jHi   = boostActive ? '#F08820' : '#2868E0';
+    const jSh   = boostActive ? '#904000' : '#112E80';
+    b( -7,-14, 14, 16, jMain);   // main torso
+    b( -7,-14,  2, 16, jSh);     // left shadow
+    b(  5,-14,  2, 16, jSh);     // right shadow
+    b( -5,-14, 10,  2, jHi);     // shoulder highlight
+    b( -3, -6,  6,  2, jSh);     // chest pocket line
+    // Sleeves (arms extend out toward poles)
+    b(-12, -9,  6,  6, jMain);   // left sleeve
+    b(  6, -9,  6,  6, jMain);   // right sleeve
+    b(-12, -9,  2,  6, jSh);     // sleeve shadow L
+    b( 10, -9,  2,  6, jSh);     // sleeve shadow R
+    // Gloves
+    b(-12, -5,  4,  4, '#E8D8B0');  // left glove
+    b(  8, -5,  4,  4, '#E8D8B0');  // right glove
 
-    // Poles
-    ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
-    if (skier.angle <= 0) { ctx.beginPath(); ctx.moveTo(-8,-5); ctx.lineTo(-20,15); ctx.stroke(); }
-    if (skier.angle >= 0) { ctx.beginPath(); ctx.moveTo(8,-5);  ctx.lineTo(20,15);  ctx.stroke(); }
+    // ── NECK ─────────────────────────────────────────────────────────────────
+    b( -2,-16,  4,  4, '#FFCC88');
+
+    // ── HEAD / FACE ──────────────────────────────────────────────────────────
+    b( -5,-24, 10,  9, '#FFCC88');  // face
+    b( -5,-24,  2,  9, '#E8A866');  // left shadow
+    b(  3,-24,  2,  9, '#E8A866');  // right shadow
+    b( -5,-16, 10,  1, '#C88040');  // chin shadow
+
+    // ── GOGGLES ──────────────────────────────────────────────────────────────
+    b( -5,-23, 10,  1, '#1A1A1A');  // strap top
+    b( -5,-19,  1,  4, '#1A1A1A');  // frame left edge
+    b(  4,-19,  1,  4, '#1A1A1A');  // frame right edge
+    b( -4,-22,  3,  4, '#D4A800');  // left lens
+    b(  1,-22,  3,  4, '#D4A800');  // right lens
+    b( -1,-22,  2,  3, '#222222');  // nose bridge
+    b( -3,-22,  1,  1, '#FFE860');  // left glint
+    b(  2,-22,  1,  1, '#FFE860');  // right glint
+    b( -5,-19, 10,  1, '#1A1A1A');  // strap bottom
+
+    // ── HAT (knit cap) ───────────────────────────────────────────────────────
+    b( -5,-26, 10,  3, '#AA0000');  // brim band / cuff
+    b( -4,-32,  8,  6, '#CC0000');  // hat body
+    b( -3,-32,  4,  6, '#DD1111');  // highlight stripe
+    b( -4,-28,  8,  2, '#FF6666');  // white stripe on hat
+    // Pom pom
+    b( -3,-35,  6,  3, '#F8F8F8');
+    b( -2,-37,  4,  2, '#E0E0E0');
+    b( -1,-38,  2,  1, '#FFFFFF');
 
     ctx.restore();
 }
@@ -247,54 +416,132 @@ function drawYeti() {
     ctx.save();
     ctx.translate(yeti.x, yeti.y);
 
-    // Frozen overlay
+    const still  = yeti.frozen || yeti.stunned;
+    const bounce = still ? 0 : Math.sin(Date.now() / 110) * 4;
+    const bk = bounce | 0;   // integer offset for fillRect
+
+    const fur  = yeti.frozen ? '#B8D8EE' : '#E8E8F4';
+    const fur2 = yeti.frozen ? '#8AB8D0' : '#C0C0D0';   // shadow/underside
+    const fur3 = yeti.frozen ? '#D4ECF8' : '#F4F4FF';   // highlight
+    const eyeC = yeti.frozen ? '#4488FF' : '#FF2200';
+
+    const b = (dx, dy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(dx, dy + bk, w, h); };
+
+    // ── GROUND SHADOW ────────────────────────────────────────────────────────
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.fillRect(-26, 52 + bk, 52, 6);
+
+    // ── LEGS ─────────────────────────────────────────────────────────────────
+    const ls = still ? 0 : Math.sin(Date.now() / 105) * 7;
+    // Left leg
+    b(-20, 24 + (ls|0), 16, 28, fur);
+    b(-20, 24 + (ls|0),  4, 28, fur2);   // inner shadow
+    b(-20, 48 + (ls|0), 18,  6, fur2);   // foot
+    b(-22, 50 + (ls|0),  6,  4, '#606070'); // claws
+    b(-16, 52 + (ls|0),  4,  4, '#606070');
+    b(-10, 51 + (ls|0),  4,  4, '#606070');
+    // Right leg
+    b(  4, 24 - (ls|0), 16, 28, fur);
+    b( 16, 24 - (ls|0),  4, 28, fur2);
+    b(  2, 48 - (ls|0), 18,  6, fur2);
+    b( 16, 50 - (ls|0),  6,  4, '#606070');
+    b( 12, 52 - (ls|0),  4,  4, '#606070');
+    b(  6, 51 - (ls|0),  4,  4, '#606070');
+
+    // ── TORSO ────────────────────────────────────────────────────────────────
+    b(-24, -14, 48, 40, fur);            // main body
+    b(-24, -14,  6, 40, fur2);           // left shadow
+    b( 18, -12,  6, 38, fur2);           // right shadow
+    b(-18, -14, 36,  6, fur3);           // shoulder highlight
+    b(-10,   4, 20, 16, fur2);           // belly
+
+    // ── ARMS ─────────────────────────────────────────────────────────────────
+    const as = still ? 0 : Math.sin(Date.now() / 160) * 8;
+    // Left arm
+    b(-44, -10 + (as|0), 22, 14, fur);
+    b(-44, -10 + (as|0),  6, 14, fur2);
+    // Left claws
+    b(-50,   0 + (as|0),  8,  4, '#606070');
+    b(-44,   2 + (as|0),  4,  5, '#606070');
+    b(-38,   1 + (as|0),  4,  5, '#606070');
+    // Right arm
+    b( 22, -10 - (as|0), 22, 14, fur);
+    b( 38, -10 - (as|0),  6, 14, fur2);
+    // Right claws
+    b( 42,   0 - (as|0),  8,  4, '#606070');
+    b( 40,   2 - (as|0),  4,  5, '#606070');
+    b( 34,   1 - (as|0),  4,  5, '#606070');
+
+    // ── HEAD ─────────────────────────────────────────────────────────────────
+    b(-22, -52, 44, 40, fur);            // head block
+    b(-22, -52,  6, 40, fur2);           // left shadow
+    b( 16, -50,  6, 38, fur2);           // right shadow
+    b(-16, -52, 32,  4, fur3);           // forehead highlight
+    // Ears
+    b(-30, -44, 10, 12, fur);
+    b(-30, -44,  4, 12, fur2);
+    b( 20, -44, 10, 12, fur);
+    b( 26, -44,  4, 12, fur2);
+    // Ear inner
+    b(-28, -42,  6,  8, '#E8A0B0');
+    b( 22, -42,  6,  8, '#E8A0B0');
+
+    // ── BROW (menacing angled ridge) ─────────────────────────────────────────
+    b(-18, -40, 14,  5, fur2);
+    b(  4, -40, 14,  5, fur2);
+    b(-14, -42,  8,  3, '#909099');   // angled highlight
+    b(  6, -42,  8,  3, '#909099');
+
+    // ── EYES ─────────────────────────────────────────────────────────────────
+    b(-16, -38, 12, 12, '#111');       // left socket
+    b(  4, -38, 12, 12, '#111');       // right socket
+    b(-14, -36,  8,  8, eyeC);         // left iris
+    b(  6, -36,  8,  8, eyeC);         // right iris
+    b(-13, -35,  3,  3, '#FF8888');    // left glint
+    b(  7, -35,  3,  3, '#FF8888');
+    b(-12, -34,  2,  2, '#FFFFFF');    // pupil reflection
+    b(  8, -34,  2,  2, '#FFFFFF');
+
+    // ── NOSE ─────────────────────────────────────────────────────────────────
+    b( -8, -24, 16, 10, fur2);
+    b( -6, -24, 12,  8, '#B090B0');
+    b( -4, -24,  8,  4, '#C8A0C8');
+    b( -6, -18,  4,  4, '#555');       // nostrils
+    b(  2, -18,  4,  4, '#555');
+
+    // ── MOUTH ────────────────────────────────────────────────────────────────
+    b(-14, -14, 28, 12, '#1A1A1A');    // mouth cavity
+    b(-12, -14, 24,  4, '#2A1010');    // upper lip
+    // Fangs
+    b(-12, -14,  4, 10, '#F4F0EC');
+    b( -6, -14,  3,  8, '#F4F0EC');
+    b(  3, -14,  3,  8, '#F4F0EC');
+    b(  8, -14,  4, 10, '#F4F0EC');
+    // Lower teeth row
+    b( -8,  -6, 16,  4, '#E0DCD8');
+    // Tongue
+    b( -4,  -2,  8,  4, '#CC4466');
+
+    // ── FROZEN ICE OVERLAY ───────────────────────────────────────────────────
     if (yeti.frozen) {
-        ctx.fillStyle = 'rgba(0,191,255,0.35)';
-        ctx.beginPath(); ctx.ellipse(0, 0, 35, 50, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = 'rgba(100,200,255,0.25)';
+        ctx.fillRect(-46, -58 + bk, 92, 118);
+        // Ice cracks
+        ctx.strokeStyle = 'rgba(180,230,255,0.6)'; ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-10, -50+bk); ctx.lineTo(5, -30+bk); ctx.lineTo(-5, -10+bk);
+        ctx.moveTo(15, -40+bk);  ctx.lineTo(0, -20+bk);
+        ctx.stroke();
     }
 
-    const bounce   = (yeti.frozen || yeti.stunned) ? 0 : Math.sin(Date.now() / 100) * 3;
-    const bodyCol  = yeti.frozen ? '#ADD8E6' : '#FFFFFF';
-    const armSwing = (yeti.frozen || yeti.stunned) ? 0 : Math.sin(Date.now() / 150) * 0.3;
-
-    // Body
-    ctx.fillStyle = bodyCol;
-    ctx.beginPath(); ctx.ellipse(0, bounce, 25, 30, 0, 0, Math.PI*2); ctx.fill();
-
-    // Arms
-    ctx.save(); ctx.rotate(-0.5 + armSwing);
-    ctx.beginPath(); ctx.ellipse(-30, -10+bounce, 12, 8, 0.5, 0, Math.PI*2); ctx.fill(); ctx.restore();
-    ctx.save(); ctx.rotate(0.5 - armSwing);
-    ctx.beginPath(); ctx.ellipse(30, -10+bounce, 12, 8, -0.5, 0, Math.PI*2); ctx.fill(); ctx.restore();
-
-    // Face
-    ctx.fillStyle = bodyCol;
-    ctx.beginPath(); ctx.ellipse(0, -25+bounce, 18, 15, 0, 0, Math.PI*2); ctx.fill();
-
-    // Eyes
-    ctx.fillStyle = yeti.frozen ? '#4169E1' : '#FF0000';
-    ctx.beginPath(); ctx.arc(-7, -28+bounce, 5, 0, Math.PI*2); ctx.arc(7, -28+bounce, 5, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.arc(-7, -28+bounce, 2, 0, Math.PI*2); ctx.arc(7, -28+bounce, 2, 0, Math.PI*2); ctx.fill();
-
-    // Mouth
-    ctx.fillStyle = '#8B0000'; ctx.beginPath(); ctx.ellipse(0, -18+bounce, 8, 5, 0, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(-6, -20+bounce, 4, 4); ctx.fillRect(2, -20+bounce, 4, 4);
-
-    // Legs
-    const legSwing = (yeti.frozen || yeti.stunned) ? 0 : Math.sin(Date.now() / 100) * 5;
-    ctx.fillStyle = bodyCol;
-    ctx.beginPath();
-    ctx.ellipse(-10, 35+bounce+legSwing, 10, 15, 0, 0, Math.PI*2);
-    ctx.ellipse(10,  35+bounce-legSwing, 10, 15, 0, 0, Math.PI*2);
-    ctx.fill();
-
-    // Stunned stars
+    // ── STUNNED STARS ────────────────────────────────────────────────────────
     if (yeti.stunned) {
         for (let i = 0; i < 3; i++) {
-            const ang = Date.now()/300 + i * Math.PI * 2/3;
+            const ang = Date.now()/280 + i * Math.PI * 2/3;
             ctx.fillStyle = '#FFD700';
-            ctx.beginPath(); ctx.arc(Math.cos(ang)*30, -55+Math.sin(ang)*8, 5, 0, Math.PI*2); ctx.fill();
+            ctx.fillRect(Math.cos(ang)*32 - 5, -68 + Math.sin(ang)*10 - 5, 10, 10);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(Math.cos(ang)*32 - 2, -68 + Math.sin(ang)*10 - 2,  4,  4);
         }
     }
 
@@ -519,6 +766,9 @@ function update() {
     // Distance
     distance += speed * 0.5;
 
+    // Difficulty ramp: sparse start, full density by 1200 m
+    difficulty = Math.min(1.0, 0.25 + (distance / 1200) * 0.75);
+
     // Move obstacles (frozen = paused)
     if (!freezeActive) {
         obstacles.forEach(obs => { obs.y -= speed; });
@@ -529,11 +779,12 @@ function update() {
     obstacles     = obstacles.filter(o => o.y > -50 && !o.destroyed);
     powerupPickups = powerupPickups.filter(p => p.y > -50);
 
-    // Spawn obstacles & power-ups
-    if (Math.random() < TREE_SPAWN_RATE   * speed/5) spawnObstacle(GAME_HEIGHT + 50);
-    if (Math.random() < ROCK_SPAWN_RATE   * speed/5) spawnObstacle(GAME_HEIGHT + 50);
-    if (Math.random() < JUMP_SPAWN_RATE   * speed/5) spawnObstacle(GAME_HEIGHT + 50);
-    if (Math.random() < POWERUP_SPAWN_RATE * speed/5) spawnPowerup(GAME_HEIGHT + 50);
+    // Spawn obstacles & power-ups (scaled by difficulty so start feels open)
+    const spd = speed / 5;
+    if (Math.random() < TREE_SPAWN_RATE    * spd * difficulty) spawnObstacle(GAME_HEIGHT + 50);
+    if (Math.random() < ROCK_SPAWN_RATE    * spd * difficulty) spawnObstacle(GAME_HEIGHT + 50);
+    if (Math.random() < JUMP_SPAWN_RATE    * spd * difficulty) spawnObstacle(GAME_HEIGHT + 50);
+    if (Math.random() < POWERUP_SPAWN_RATE * spd)              spawnPowerup(GAME_HEIGHT + 50);
 
     // Collect power-ups
     for (let i = powerupPickups.length - 1; i >= 0; i--) {
@@ -727,7 +978,7 @@ function render() {
 
 function resetGame() {
     gameState = 'playing';
-    distance = 0; speed = baseSpeed;
+    distance = 0; speed = baseSpeed; difficulty = 0.25;
     skier.x = GAME_WIDTH / 2; skier.angle = 0;
     jumpHeight = 0; jumpVelocity = 0;
     yeti.active = false; yeti.y = -200;
