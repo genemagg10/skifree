@@ -29,7 +29,8 @@ resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 
 // Game state
-let gameState = 'charselect'; // 'charselect', 'playing', 'crashed', 'caught', 'jumping'
+let gameState = 'charselect'; // 'charselect', 'playing', 'crashed', 'caught', 'jumping', 'eating'
+let eatingAnimFrame = 0;      // frame counter for yeti-eating animation
 let playerType = 'skier';     // 'skier' or 'snowboarder'
 let distance = 0;
 let speed = 5;
@@ -694,6 +695,225 @@ function drawYeti() {
     ctx.restore();
 }
 
+// ─── Yeti eating animation ────────────────────────────────────────────────────
+
+function drawEatingAnimation() {
+    const frame = eatingAnimFrame;
+    const isSB = playerType === 'snowboarder';
+
+    // Phase boundaries (frames)
+    const GRAB_END  = 50;   // yeti grabs, skier flails
+    const EAT_END   = 110;  // skier shrinks into open mouth
+    const CHOMP_END = 150;  // rapid chomping + particles
+    const TOTAL     = 180;  // satisfied + BURP, then fade to caught
+
+    const clamp01 = v => Math.max(0, Math.min(1, v));
+    const grabT   = clamp01(frame / GRAB_END);
+    const eatT    = clamp01((frame - GRAB_END)  / (EAT_END   - GRAB_END));
+    const chompT  = clamp01((frame - EAT_END)   / (CHOMP_END - EAT_END));
+    const satisfT = clamp01((frame - CHOMP_END) / (TOTAL     - CHOMP_END));
+
+    // How wide the mouth opens (0 = closed, 1 = max)
+    let mouthOpen;
+    if (frame < GRAB_END)        mouthOpen = grabT;
+    else if (frame < EAT_END)    mouthOpen = 1.0;
+    else if (frame < CHOMP_END)  mouthOpen = 0.35 + Math.abs(Math.sin(frame * 0.55)) * 0.65;
+    else                         mouthOpen = Math.max(0, 1 - satisfT * 2);
+
+    const headTilt  = Math.round(eatT * 5);      // yeti tilts head back when eating
+    const armInward = Math.round(grabT * 14);     // arms squeeze in to hug skier
+    const armLift   = Math.round(grabT * 6);
+    const bellyE    = Math.round(satisfT * 8);    // belly bulges after eating
+
+    const cx = yeti.x;
+    const cy = yeti.y;
+
+    // ── Draw yeti (eating pose) ───────────────────────────────────────────────
+    ctx.save();
+    ctx.translate(cx, cy);
+    const fur  = '#E8E8F4';
+    const fur2 = '#C0C0D0';
+    const fur3 = '#F4F4FF';
+    const b = (dx, dy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(dx, dy, w, h); };
+
+    // Ground shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.fillRect(-26, 52, 52, 6);
+
+    // Legs (planted – no walk cycle while eating)
+    b(-20, 24, 16, 28, fur);  b(-20, 24,  4, 28, fur2);
+    b(-20, 48, 18,  6, fur2); b(-22, 50,  6,  4, '#606070');
+    b(-16, 52,  4,  4, '#606070'); b(-10, 51,  4,  4, '#606070');
+    b(  4, 24, 16, 28, fur);  b( 16, 24,  4, 28, fur2);
+    b(  2, 48, 18,  6, fur2); b( 16, 50,  6,  4, '#606070');
+    b( 12, 52,  4,  4, '#606070'); b(  6, 51,  4,  4, '#606070');
+
+    // Torso (belly bulges after eating)
+    b(-24,          -14, 48 + bellyE/2, 40 + bellyE, fur);
+    b(-24,          -14,  6, 40, fur2);
+    b( 18 + bellyE/4, -12,  6, 38, fur2);
+    b(-18,          -14, 36,  6, fur3);
+    b(-10 - bellyE/2, 4, 20 + bellyE, 16 + bellyE, fur2);
+
+    // Arms – squeeze inward/upward while grabbing, relax after
+    b(-44 + armInward, -10 - armLift, 22, 14, fur);
+    b(-44 + armInward, -10 - armLift,  6, 14, fur2);
+    b(-50 + armInward,   0 - armLift,  8,  4, '#606070');
+    b(-44 + armInward,   2 - armLift,  4,  5, '#606070');
+    b(-38 + armInward,   1 - armLift,  4,  5, '#606070');
+    b( 22 - armInward, -10 + armLift, 22, 14, fur);
+    b( 38 - armInward, -10 + armLift,  6, 14, fur2);
+    b( 42 - armInward,   0 + armLift,  8,  4, '#606070');
+    b( 40 - armInward,   2 + armLift,  4,  5, '#606070');
+    b( 34 - armInward,   1 + armLift,  4,  5, '#606070');
+
+    // Head (tilts back when eating)
+    const hy = -52 - headTilt;
+    b(-22, hy,      44, 40, fur);  b(-22, hy,       6, 40, fur2);
+    b( 16, hy + 2,   6, 38, fur2); b(-16, hy,      32,  4, fur3);
+    b(-30, hy + 8,  10, 12, fur);  b(-30, hy + 8,   4, 12, fur2);
+    b( 20, hy + 8,  10, 12, fur);  b( 26, hy + 8,   4, 12, fur2);
+    b(-28, hy + 10,  6,  8, '#E8A0B0'); b( 22, hy + 10,  6,  8, '#E8A0B0');
+
+    // Brow (angry while hunting/eating, satisfied after)
+    b(-18, hy + 12, 14,  5, fur2); b(  4, hy + 12, 14,  5, fur2);
+    if (satisfT > 0.55) {
+        b(-14, hy + 12, 10,  7, fur2); b(  4, hy + 12, 10,  7, fur2); // droopy-happy
+    } else {
+        b(-14, hy + 10,  8,  3, '#909099'); b(  6, hy + 10,  8,  3, '#909099'); // angry
+    }
+
+    // Eyes
+    if (satisfT > 0.6) {
+        // Satisfied squint + golden gleam
+        b(-16, hy + 14, 12,  5, '#111'); b(  4, hy + 14, 12,  5, '#111');
+        b(-14, hy + 16,  8,  3, '#FFD700'); b(  6, hy + 16,  8,  3, '#FFD700');
+    } else {
+        b(-16, hy + 14, 12, 12, '#111'); b(  4, hy + 14, 12, 12, '#111');
+        b(-14, hy + 16,  8,  8, '#FF2200'); b(  6, hy + 16,  8,  8, '#FF2200');
+        b(-13, hy + 17,  3,  3, '#FF8888'); b(  7, hy + 17,  3,  3, '#FF8888');
+        b(-12, hy + 18,  2,  2, '#FFFFFF'); b(  8, hy + 18,  2,  2, '#FFFFFF');
+    }
+
+    // Nose
+    const ny = hy + 28;
+    b( -8, ny,     16, 10, fur2); b( -6, ny,     12,  8, '#B090B0');
+    b( -4, ny,      8,  4, '#C8A0C8');
+    b( -6, ny + 6,  4,  4, '#555'); b(  2, ny + 6,  4,  4, '#555');
+
+    // Mouth – animated height
+    const my  = hy + 38;
+    const mh  = Math.round(12 + mouthOpen * 22); // up to 34 px tall
+    b(-14, my, 28, mh, '#1A1A1A');
+    b(-12, my, 24,  4, '#2A1010');
+    if (mouthOpen > 0.55) {
+        // Wide open: throat and tongue visible
+        b(-10, my + 4, 20, mh - 8, '#CC3355');
+        b( -6, my + 8, 12,  6, '#E05070');
+        b(-12, my,  4, Math.min(14, mh), '#F4F0EC');
+        b(  8, my,  4, Math.min(14, mh), '#F4F0EC');
+    } else {
+        b(-12, my,  4, 10, '#F4F0EC'); b( -6, my,  3,  8, '#F4F0EC');
+        b(  3, my,  3,  8, '#F4F0EC'); b(  8, my,  4, 10, '#F4F0EC');
+        b( -8, my + 8, 16,  4, '#E0DCD8');
+        if (mouthOpen > 0.05) b( -4, my + 12, 8, 4, '#CC4466');
+    }
+
+    ctx.restore();
+
+    // ── Draw skier / snowboarder being eaten ──────────────────────────────────
+    if (frame < EAT_END) {
+        let sx, sy, sc, rot;
+
+        if (frame < GRAB_END) {
+            // Phase 1: skier flailing above yeti's open mouth
+            sx  = cx + Math.sin(frame * 0.28) * 10;
+            sy  = cy - 85 + grabT * 18;
+            sc  = 1.0;
+            rot = Math.sin(frame * 0.38) * 0.55;
+        } else {
+            // Phase 2: skier shrinks & spins into mouth
+            sx  = cx + Math.sin(frame * 0.2) * 4;
+            sy  = cy - 67 + eatT * 55;
+            sc  = 1.0 - eatT;
+            rot = eatT * Math.PI * 2.5;
+        }
+
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(rot);
+        ctx.scale(sc, sc);
+
+        const bs = (dx, dy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(dx, dy, w, h); };
+        // Helmet
+        bs(-5, -28, 10,  6, '#606878'); bs(-3, -30,  6,  4, '#808890');
+        // Goggles
+        bs(-5, -24,  4,  3, '#6090CC'); bs( 1, -24,  4,  3, '#6090CC');
+        // Face
+        bs(-4, -22,  8, 10, '#F0B880');
+        // Jacket
+        const jCol = isSB ? '#2878C8' : '#C83020';
+        bs(-7, -12, 14, 18, jCol);
+        // Arms flailing outward
+        const armAng = Math.sin(frame * 0.42) * 0.3;
+        ctx.save(); ctx.rotate(-1.0 + armAng); bs(-16, -12,  4, 14, jCol); ctx.restore();
+        ctx.save(); ctx.rotate( 1.0 - armAng); bs( 12, -12,  4, 14, jCol); ctx.restore();
+        // Legs
+        bs(-5,  6,  4, 12, '#3060A0'); bs( 1,  6,  4, 12, '#3060A0');
+        // Equipment flying off
+        if (isSB) {
+            ctx.save(); ctx.rotate(0.5 + Math.sin(frame * 0.3) * 0.25);
+            bs(-12, 14, 24, 3, '#3A3A44'); ctx.restore();
+        } else {
+            ctx.save(); ctx.rotate( 0.55 + Math.sin(frame * 0.25) * 0.2);
+            bs(-14, 12, 22, 3, '#CC1100'); ctx.restore();
+            ctx.save(); ctx.rotate(-0.50 - Math.sin(frame * 0.25) * 0.2);
+            bs(  2, 12, 22, 3, '#CC1100'); ctx.restore();
+        }
+
+        ctx.restore();
+    }
+
+    // ── Chomping particles ────────────────────────────────────────────────────
+    if (frame >= EAT_END && frame < CHOMP_END) {
+        for (let i = 0; i < 10; i++) {
+            const angle = (i / 10) * Math.PI * 2 + frame * 0.22;
+            const r  = 12 + chompT * 55;
+            const px = cx + Math.cos(angle) * r;
+            const py = (cy - 20 - headTilt) + Math.sin(angle) * r * 0.45;
+            const a  = 1 - chompT;
+            ctx.fillStyle = `rgba(255,200,50,${a})`;
+            ctx.fillRect(px - 4, py - 4, 8, 8);
+            ctx.fillStyle = `rgba(255,255,255,${a * 0.8})`;
+            ctx.fillRect(px - 2, py - 2, 4, 4);
+        }
+    }
+
+    // ── *BURP!* text ──────────────────────────────────────────────────────────
+    if (satisfT > 0.15 && satisfT < 0.95) {
+        const ta = satisfT < 0.5 ? (satisfT - 0.15) / 0.35 : (0.95 - satisfT) / 0.45;
+        const pulse = 1 + Math.sin(frame * 0.45) * 0.12;
+        ctx.save();
+        ctx.translate(cx, cy - 88);
+        ctx.scale(pulse, pulse);
+        ctx.font = 'bold 26px "Orbitron", "Courier New", monospace';
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = `rgba(80,30,0,${ta})`;
+        ctx.strokeText('*BURP!*', 0, 0);
+        ctx.fillStyle = `rgba(255,215,50,${ta})`;
+        ctx.fillText('*BURP!*', 0, 0);
+        ctx.restore();
+    }
+
+    // ── Fade to caught overlay ────────────────────────────────────────────────
+    if (satisfT > 0.65) {
+        const alpha = ((satisfT - 0.65) / 0.35) * 0.75;
+        ctx.fillStyle = `rgba(100,0,0,${alpha})`;
+        ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    }
+}
+
 function drawProjectiles() {
     powerupProjectiles.forEach(proj => {
         ctx.save();
@@ -1113,6 +1333,13 @@ function update() {
 
     if (gameState === 'charselect' || gameState === 'crashed' || gameState === 'caught') return;
 
+    // Eating animation – freeze world, advance frame counter
+    if (gameState === 'eating') {
+        eatingAnimFrame++;
+        if (eatingAnimFrame >= 180) gameState = 'caught';
+        return;
+    }
+
     // Steering – relative touch takes priority, then mouse, then keyboard
     if (useRelativeTouch) {
         skier.angle = Math.max(-2, Math.min(2, touchDeltaX / 40));
@@ -1290,7 +1517,8 @@ function update() {
         }
 
         if (checkYetiCollision() && jumpHeight < 20 && !shieldActive) {
-            gameState = 'caught';
+            gameState = 'eating';
+            eatingAnimFrame = 0;
             checkAndSaveHighScore();
         }
     }
@@ -1332,11 +1560,14 @@ function render() {
     // Projectiles
     drawProjectiles();
 
-    // Skier / Snowboarder
-    drawSkier();
+    // Skier / Snowboarder (hidden during eating animation – animation draws its own)
+    if (gameState !== 'eating') drawSkier();
 
-    // Yeti
-    drawYeti();
+    // Yeti (same – eating animation draws its own modified version)
+    if (gameState !== 'eating') drawYeti();
+
+    // Yeti eating animation
+    if (gameState === 'eating') drawEatingAnimation();
 
     // Snow
     drawSnow();
@@ -1357,7 +1588,9 @@ function render() {
 
     // Score bar
     let status = '';
-    if (yeti.active) {
+    if (gameState === 'eating') {
+        status = ' | YETI EATING!';
+    } else if (yeti.active) {
         if      (yeti.frozen)  status = ' | YETI FROZEN!';
         else if (yeti.stunned) status = ' | YETI STUNNED!';
         else                   status = ' | YETI CHASING!';
@@ -1407,6 +1640,7 @@ function resetGame() {
     yeti.active = false; yeti.y = -200;
     yeti.retreatCooldown = 0;
     yeti.frozen = false; yeti.stunned = false;
+    eatingAnimFrame = 0;
     heldPowerup = null;
     boostActive = shieldActive = freezeActive = false;
     boostTimer = shieldTimer = freezeTimer = 0;
@@ -1451,6 +1685,7 @@ document.addEventListener('keydown', e => {
         case 'f': keys.boost = true; break;
         case ' ':
             if (gameState === 'crashed' || gameState === 'caught') { resetGame(); }
+            else if (gameState === 'eating') { gameState = 'caught'; }
             else if (heldPowerup) { usePowerup(); }
             else { keys.space = true; }
             e.preventDefault(); break;
@@ -1488,6 +1723,7 @@ canvas.addEventListener('click', e => {
         return;
     }
     if (gameState === 'crashed' || gameState === 'caught') { resetGame(); return; }
+    if (gameState === 'eating') { gameState = 'caught'; return; }
     if (heldPowerup) usePowerup();
 });
 
@@ -1516,6 +1752,7 @@ canvas.addEventListener('touchstart', e => {
     }
 
     if (gameState === 'crashed' || gameState === 'caught') { resetGame(); return; }
+    if (gameState === 'eating') { gameState = 'caught'; return; }
 
     // Tap JUMP button area (bottom-left circle, center at 44, GAME_HEIGHT-38)
     const jdx = pos.x - 44, jdy = pos.y - (GAME_HEIGHT - 38);
