@@ -113,13 +113,13 @@ const POWERUP_LABELS = {
     boost: 'B', snowball: 'S', shield: 'SH', freeze: 'F', bomb: '!'
 };
 
-// Embossed coin metal palettes per power-up type
+// Embossed coin metal palettes – derived from POWERUP_COLORS for visual consistency
 const COIN_METALS = {
-    boost:    { dark: '#9A7810', face: '#E8C840', hi: '#FFF0A0', rim: '#C8A828', letter: '#806010' },
-    snowball: { dark: '#3A7090', face: '#78B8D8', hi: '#C0E8FF', rim: '#5898B8', letter: '#285868' },
-    shield:   { dark: '#1C7030', face: '#50C868', hi: '#98FFB0', rim: '#38A850', letter: '#145020' },
-    freeze:   { dark: '#206898', face: '#50A8D8', hi: '#A0DFFF', rim: '#3890B8', letter: '#184870' },
-    bomb:     { dark: '#8A2818', face: '#D86050', hi: '#FFB0A0', rim: '#B83828', letter: '#681810' }
+    boost:    { dark: '#B89A00', face: '#FFD700', hi: '#FFF0A0', rim: '#D4B400', letter: '#8A7000' },
+    snowball: { dark: '#5A9AB0', face: '#87CEEB', hi: '#C4E8FF', rim: '#70B4D4', letter: '#3A7A98' },
+    shield:   { dark: '#00AA55', face: '#00FF7F', hi: '#80FFB8', rim: '#00D468', letter: '#008040' },
+    freeze:   { dark: '#0080AA', face: '#00BFFF', hi: '#80E0FF', rim: '#009CD8', letter: '#006090' },
+    bomb:     { dark: '#B03828', face: '#FF6347', hi: '#FF9A88', rim: '#D8503A', letter: '#882818' }
 };
 
 // ─── Initialisation ──────────────────────────────────────────────────────────
@@ -977,19 +977,20 @@ function drawCharPreview(type) {
 // ─── HUD ──────────────────────────────────────────────────────────────────────
 
 function drawPowerupHUD() {
-    const hx = 10, hy = GAME_HEIGHT - 55;
+    // Positioned right of the jump button (both on the left side of screen)
+    const hx = 85, hy = GAME_HEIGHT - 52;
 
     // Background
     ctx.fillStyle = 'rgba(5,15,30,0.72)';
-    ctx.fillRect(hx, hy, 138, 46);
+    ctx.fillRect(hx, hy, 130, 44);
 
     // Border
     ctx.strokeStyle = heldPowerup ? POWERUP_COLORS[heldPowerup] : '#2A6080';
-    ctx.lineWidth = 2; ctx.strokeRect(hx, hy, 138, 46);
+    ctx.lineWidth = 2; ctx.strokeRect(hx, hy, 130, 44);
     ctx.strokeStyle = heldPowerup
         ? POWERUP_COLORS[heldPowerup] + '33'
         : 'rgba(42,96,128,0.2)';
-    ctx.lineWidth = 1; ctx.strokeRect(hx + 2, hy + 2, 134, 42);
+    ctx.lineWidth = 1; ctx.strokeRect(hx + 2, hy + 2, 126, 40);
 
     // Label
     ctx.fillStyle = '#66BBDD'; ctx.font = 'bold 10px "Orbitron", "Courier New", monospace'; ctx.textAlign = 'left';
@@ -998,15 +999,15 @@ function drawPowerupHUD() {
     if (heldPowerup) {
         const col = POWERUP_COLORS[heldPowerup];
         ctx.fillStyle = col;
-        ctx.fillRect(hx + 5, hy + 20, 128, 20);
+        ctx.fillRect(hx + 5, hy + 19, 120, 19);
         ctx.fillStyle = '#000'; ctx.font = 'bold 11px "Orbitron", "Courier New", monospace';
-        ctx.fillText(heldPowerup.toUpperCase() + '  [E]', hx + 9, hy + 34);
+        ctx.fillText(heldPowerup.toUpperCase() + '  [E]', hx + 9, hy + 33);
     } else {
         ctx.fillStyle = '#334455'; ctx.font = '10px "Orbitron", "Courier New", monospace';
-        ctx.fillText('- empty -', hx + 6, hy + 34);
+        ctx.fillText('- empty -', hx + 6, hy + 33);
     }
 
-    // Active timer badges
+    // Active timer badges – colors match their power-up type consistently
     let ty = hy - 6;
     const badge = (label, col, sec) => {
         ctx.fillStyle = 'rgba(5,15,30,0.6)';
@@ -1017,16 +1018,17 @@ function drawPowerupHUD() {
         ctx.fillText(label + ' ' + sec + 's', hx + 4, ty - 3);
         ty -= 21;
     };
-    if (shieldActive) badge('SHIELD',   'rgba(0,255,127,0.8)', Math.ceil(shieldTimer/60));
-    if (boostActive)  badge('BOOST',    'rgba(255,200,0,0.8)', Math.ceil(boostTimer/60));
-    if (yeti.frozen)  badge('YT FROZE', 'rgba(0,191,255,0.8)', Math.ceil(yeti.frozenTimer/60));
-    if (yeti.stunned) badge('YT STUN',  'rgba(255,215,0,0.8)', Math.ceil(yeti.stunnedTimer/60));
+    if (shieldActive) badge('SHIELD',   'rgba(0,255,127,0.8)',  Math.ceil(shieldTimer/60));
+    if (boostActive)  badge('BOOST',    'rgba(255,215,0,0.8)',  Math.ceil(boostTimer/60));
+    if (yeti.frozen)  badge('YT FROZE', 'rgba(0,191,255,0.8)',  Math.ceil(yeti.frozenTimer/60));
+    if (yeti.stunned) badge('YT STUN',  'rgba(255,140,0,0.85)', Math.ceil(yeti.stunnedTimer/60));
 }
 
 function drawMobileButtons() {
-    const x = GAME_WIDTH - 44;
-    const y = GAME_HEIGHT - 44;
-    const r = 32;
+    // Jump button – bottom-left so both buttons are on the same side for one-handed use
+    const x = 44;
+    const y = GAME_HEIGHT - 38;
+    const r = 30;
 
     ctx.save();
 
@@ -1464,14 +1466,15 @@ canvas.addEventListener('touchstart', e => {
 
     if (gameState === 'crashed' || gameState === 'caught') { resetGame(); return; }
 
-    // Tap JUMP button area (bottom-right circle)
-    if (Math.abs(pos.x - (GAME_WIDTH - 44)) < 44 && Math.abs(pos.y - (GAME_HEIGHT - 44)) < 44) {
+    // Tap JUMP button area (bottom-left circle, center at 44, GAME_HEIGHT-38)
+    const jdx = pos.x - 44, jdy = pos.y - (GAME_HEIGHT - 38);
+    if (Math.sqrt(jdx*jdx + jdy*jdy) < 44) {
         if (jumpHeight === 0) { jumpVelocity = 12; gameState = 'jumping'; }
         return;
     }
 
-    // Tap power-up HUD area (bottom-left box)
-    if (pos.x < 155 && pos.y > GAME_HEIGHT - 60) {
+    // Tap power-up HUD area (right of jump button, x=85..215, bottom strip)
+    if (pos.x >= 80 && pos.x < 220 && pos.y > GAME_HEIGHT - 58) {
         usePowerup(); return;
     }
 
