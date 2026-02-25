@@ -964,10 +964,10 @@ function drawProjectiles() {
                     ctx.beginPath(); ctx.arc(Math.random()*4-2, -r - 2, 2, 0, Math.PI*2); ctx.fill();
                 }
             } else {
-                // Base bullet – bright white/yellow
-                ctx.fillStyle = '#FFFFCC'; ctx.strokeStyle = '#DDAA44'; ctx.lineWidth = 1;
-                ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-                ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); ctx.arc(-0.5, -0.5, r * 0.4, 0, Math.PI*2); ctx.fill();
+                // Base bullet – hot orange with dark outline for visibility on snow
+                ctx.fillStyle = '#FF6600'; ctx.strokeStyle = '#993300'; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.arc(0, 0, r + 1, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                ctx.fillStyle = '#FFAA33'; ctx.beginPath(); ctx.arc(-0.5, -0.5, (r + 1) * 0.45, 0, Math.PI*2); ctx.fill();
             }
         }
         ctx.restore();
