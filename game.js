@@ -1,4 +1,4 @@
-// Frost Byte - Enhanced with Mobile Support, Yeti Chase Mechanics & Power-ups
+// FrostByte - Enhanced with Mobile Support, Yeti Chase Mechanics & Power-ups
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const scoreDisplay = document.getElementById('score');
@@ -29,7 +29,8 @@ resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 
 // Game state
-let gameState = 'playing'; // 'playing', 'crashed', 'caught', 'jumping'
+let gameState = 'charselect'; // 'charselect', 'playing', 'crashed', 'caught', 'jumping'
+let playerType = 'skier';     // 'skier' or 'snowboarder'
 let distance = 0;
 let speed = 5;
 let baseSpeed = 5;
@@ -112,6 +113,15 @@ const POWERUP_LABELS = {
     boost: 'B', snowball: 'S', shield: 'SH', freeze: 'F', bomb: '!'
 };
 
+// Embossed coin metal palettes per power-up type
+const COIN_METALS = {
+    boost:    { dark: '#9A7810', face: '#E8C840', hi: '#FFF0A0', rim: '#C8A828', letter: '#806010' },
+    snowball: { dark: '#3A7090', face: '#78B8D8', hi: '#C0E8FF', rim: '#5898B8', letter: '#285868' },
+    shield:   { dark: '#1C7030', face: '#50C868', hi: '#98FFB0', rim: '#38A850', letter: '#145020' },
+    freeze:   { dark: '#206898', face: '#50A8D8', hi: '#A0DFFF', rim: '#3890B8', letter: '#184870' },
+    bomb:     { dark: '#8A2818', face: '#D86050', hi: '#FFB0A0', rim: '#B83828', letter: '#681810' }
+};
+
 // ─── Initialisation ──────────────────────────────────────────────────────────
 
 function initObstacles() {
@@ -138,7 +148,8 @@ function spawnObstacle(y) {
         type: type,
         width:  type === 'tree' ? 30 : type === 'rock' ? 25 : 40,
         height: type === 'tree' ? 40 : type === 'rock' ? 20 : 10,
-        destroyed: false
+        destroyed: false,
+        snowy: type === 'tree' ? Math.random() < 0.4 : false  // 40% of trees get heavy snow
     });
 }
 
@@ -155,149 +166,155 @@ function spawnPowerup(y) {
 
 // ─── Drawing helpers ─────────────────────────────────────────────────────────
 
-function drawTree(x, y) {
-    // Pixel-art fir tree built from fillRect blocks only.
-    // (x,y) = centre of trunk base; tree grows upward.
+function drawTree(x, y, snowy) {
     const b = (dx, dy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(x+dx, y+dy, w, h); };
 
     // ── Trunk ──────────────────────────────────────────────────────
-    b(-4, 8,  8, 16, '#5B2E0A');   // main bark
-    b(-3, 8,  3, 16, '#7A3D12');   // left highlight
-    b( 2, 9,  2, 14, '#3A1D06');   // right shadow
+    b(-3, 8,  6, 14, '#8B5E3C');   // warm brown bark
+    b(-2, 8,  2, 14, '#A07850');   // left highlight
+    b( 2, 9,  2, 12, '#6B4226');   // right shadow
 
     // ── Base foliage tier (widest) ─────────────────────────────────
-    b(-16, -4, 32, 13, '#155A18'); // dark back fill
-    b(-14, -4, 10,  8, '#1A7020'); // mid-left body
-    b( -2, -4, 10,  8, '#1A7020'); // mid-right body
-    b(  8, -2,  6, 10, '#0C3E0E'); // right shadow
-    b(-14, -4,  6,  2, '#FFFFFF'); // snow left
-    b(  2, -4,  6,  2, '#FFFFFF'); // snow right
-    b( -2, -4,  2,  2, '#E4E4E4'); // snow centre gap
-    b(-14, -4,  4,  4, '#22902C'); // lit highlight
+    b(-15, -3, 30, 12, '#2E8B3E');  // bright green base
+    b(-13, -3,  9,  7, '#3CB050');  // left highlight
+    b( -1, -3,  9,  7, '#3CB050');  // right highlight
+    b(  9, -1,  6,  9, '#1D6B2E');  // right shadow
+    b(-13, -3,  3,  3, '#4CD068');  // top-left bright spot
 
     // ── Middle tier ────────────────────────────────────────────────
-    b(-12,-16, 24, 13, '#166A1A');
-    b(-10,-16,  8,  8, '#1C8224');
-    b(  0,-16,  8,  8, '#1C8224');
-    b(  8,-14,  4, 10, '#0D4410');
-    b(-10,-16,  5,  2, '#FFFFFF'); // snow
-    b(  2,-16,  5,  2, '#FFFFFF');
-    b(-10,-16,  3,  4, '#23A22E'); // lit highlight
+    b(-11,-14, 22, 12, '#2D9040');
+    b( -9,-14,  7,  7, '#3CB050');
+    b(  1,-14,  7,  7, '#3CB050');
+    b(  7,-12,  4,  9, '#1E7030');
+    b( -9,-14,  3,  3, '#4CD068');
 
     // ── Upper tier ─────────────────────────────────────────────────
-    b( -8,-28, 16, 13, '#178020');
-    b( -6,-28,  6,  7, '#1E9A28');
-    b(  1,-28,  5,  7, '#1E9A28');
-    b(  5,-26,  4, 10, '#0E5212');
-    b( -6,-28,  4,  2, '#FFFFFF'); // snow
-    b(  0,-28,  4,  2, '#FFFFFF');
-    b( -6,-28,  3,  4, '#27C033'); // lit highlight
+    b( -8,-24, 16, 11, '#30A048');
+    b( -6,-24,  5,  6, '#42C05A');
+    b(  1,-24,  5,  6, '#42C05A');
+    b(  5,-22,  3,  8, '#1E7030');
 
     // ── Tip ────────────────────────────────────────────────────────
-    b( -5,-39, 10, 12, '#199028');
-    b( -3,-39,  4,  8, '#21B232');
-    b(  2,-37,  2,  8, '#0F5E14');
-    b( -3,-39,  3,  2, '#FFFFFF'); // snow cap
-    b( -2,-41,  4,  2, '#FFFFFF');
-    b( -1,-43,  2,  2, '#FFFFFF'); // peak
+    b( -5,-34, 10, 11, '#35AA50');
+    b( -3,-34,  4,  7, '#4CD068');
+    b(  2,-32,  2,  7, '#208038');
+
+    if (snowy) {
+        // Heavy snow coverage – thick shelves on each tier
+        b(-13, -4, 26,  3, '#F0F4FF');  // base snow shelf
+        b(-15, -5, 10,  2, '#FFFFFF');
+        b(  3, -5, 10,  2, '#FFFFFF');
+        b( -9,-15, 18,  3, '#F0F4FF');  // middle snow shelf
+        b(-11,-16,  8,  2, '#FFFFFF');
+        b(  3,-16,  8,  2, '#FFFFFF');
+        b( -6,-25, 12,  3, '#F0F4FF');  // upper snow shelf
+        b( -8,-26,  6,  2, '#FFFFFF');
+        b(  2,-26,  6,  2, '#FFFFFF');
+        b( -4,-35,  8,  2, '#FFFFFF');  // tip snow
+        b( -3,-37,  6,  2, '#F0F4FF');
+        b( -2,-39,  4,  2, '#FFFFFF');
+        b( -1,-41,  2,  2, '#FFFFFF');  // snow peak
+    } else {
+        // Light snow on tips only
+        b( -3,-34,  3,  2, '#F0F0F0');
+        b( -2,-36,  4,  2, '#FFFFFF');
+        b( -1,-38,  2,  2, '#FFFFFF');  // peak
+    }
 }
 
 function drawRock(x, y) {
-    // Chunky pixel-art boulder built from fillRect.
     const b = (dx, dy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(x+dx, y+dy, w, h); };
 
     // Ground shadow
-    b(-12, 8, 26, 4, 'rgba(0,0,0,0.18)');
+    b(-12, 8, 26, 4, 'rgba(0,0,0,0.14)');
 
-    // Dark base outline
-    b(-12, -2, 26, 14, '#2E2E2E');
+    // Dark outline
+    b(-12, -2, 26, 14, '#505050');
 
-    // Main body
-    b(-10, -6, 22, 16, '#555555');
-    b(-14, -2, 6,  10, '#555555');   // left bulge
-    b( 10, -2, 6,  10, '#555555');   // right bulge
+    // Main body – brighter
+    b(-10, -6, 22, 16, '#7E7E7E');
+    b(-14, -2, 6,  10, '#767676');   // left bulge
+    b( 10, -2, 6,  10, '#767676');   // right bulge
 
-    // Mid highlight plane
-    b( -8, -6, 10,  8, '#6A6A6A');
-    b( -4, -8,  8,  4, '#787878');   // top face
+    // Mid highlight
+    b( -8, -6, 10,  8, '#949494');
+    b( -4, -8,  8,  4, '#A4A4A4');   // top face
 
-    // Bright highlight (upper left catch-light)
-    b( -8, -8,  6,  4, '#8C8C8C');
-    b( -6, -8,  4,  2, '#A0A0A0');
+    // Bright highlight
+    b( -8, -8,  6,  4, '#B8B8B8');
+    b( -6, -9,  4,  2, '#CCCCCC');
 
-    // Shadow underside / right
-    b(  6,  2, 10, 10, '#383838');
-    b( 10, -2,  4, 14, '#2A2A2A');
+    // Shadow side
+    b(  6,  2, 10, 10, '#5E5E5E');
+    b( 10, -2,  4, 14, '#4E4E4E');
 
     // Snow on top
-    b( -9, -9, 12,  3, '#F2F2F2');
+    b( -9, -9, 12,  3, '#F6F6F6');
     b(-11, -7,  4,  2, '#FFFFFF');
-    b(  2, -8,  5,  2, '#E8E8E8');
-    b( -7,-11,  6,  2, '#FFFFFF');   // fresh snow peak
+    b(  2, -8,  5,  2, '#F0F0F0');
+    b( -7,-11,  6,  2, '#FFFFFF');
 }
 
 function drawJump(x, y) {
-    // Pixel-art snow ramp built from fillRect rows (stepped profile).
     const b = (dx, dy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(x+dx, y+dy, w, h); };
 
     // Shadow on snow
-    b(-22, 6, 44, 5, 'rgba(0,0,0,0.15)');
+    b(-22, 6, 44, 5, 'rgba(0,0,0,0.10)');
 
-    // Ramp surface – stacked rows, widening as we go down
-    b(-10, -8,  22, 3, '#C8B090');   // top row (narrower)
-    b(-13, -5,  28, 3, '#D4BC9A');
-    b(-16, -2,  34, 3, '#DEBFA0');
-    b(-20,  1,  40, 4, '#E8C8AA');   // bottom/widest
+    // Ramp surface – bright warm tones
+    b(-10, -8,  22, 3, '#DCCAA8');
+    b(-13, -5,  28, 3, '#E8D6B4');
+    b(-16, -2,  34, 3, '#F0DDBB');
+    b(-20,  1,  40, 4, '#F8E8CC');   // bottom/widest
 
-    // Left edge (thick vertical face of ramp)
-    b(-20,  1,   4, 4, '#A8885A');
-    b(-16, -2,   4, 3, '#B09060');
-    b(-13, -5,   3, 3, '#B89468');
-    b(-10, -8,   2, 3, '#C0A070');
+    // Left edge
+    b(-20,  1,   4, 4, '#BCA478');
+    b(-16, -2,   4, 3, '#C4AC80');
+    b(-13, -5,   3, 3, '#CEB488');
+    b(-10, -8,   2, 3, '#D4B890');
 
     // Top highlight stripe
-    b( -8, -8,  18, 2, '#F0D8B8');
+    b( -8, -8,  18, 2, '#FFF4E0');
 
     // Right shading
-    b( 16, -5,   4, 6, '#C0A878');
+    b( 16, -5,   4, 6, '#D4C098');
 
-    // Arrow markers on ramp surface (show it's a jump)
-    b( -2, -6,   4, 2, '#A07840');
-    b( -3, -3,   6, 2, '#A07840');
+    // Arrow markers on ramp surface
+    b( -2, -6,   4, 2, '#C09868');
+    b( -3, -3,   6, 2, '#C09868');
 }
 
 function drawTombstone(x, y, score) {
-    // Pixel-art tombstone marking the player's previous high-score death location
     const b = (dx, dy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(x+dx, y+dy, w, h); };
 
     // Ground shadow
-    b(-16, 6, 32, 5, 'rgba(0,0,0,0.2)');
+    b(-16, 6, 32, 5, 'rgba(0,0,0,0.18)');
 
     // Ground mound
-    b(-18, 2, 36, 8, '#8A8A7A');
-    b(-16, 0, 32, 4, '#9A9A8A');
+    b(-18, 2, 36, 8, '#909080');
+    b(-16, 0, 32, 4, '#A0A090');
 
     // Tombstone body
-    b(-11, -24, 22, 28, '#686868');
-    b(-9, -28, 18, 6, '#727272');
-    b(-7, -30, 14, 4, '#7A7A7A');
-    b(-5, -32, 10, 4, '#828282');
+    b(-11, -24, 22, 28, '#787878');
+    b(-9, -28, 18, 6, '#828282');
+    b(-7, -30, 14, 4, '#8A8A8A');
+    b(-5, -32, 10, 4, '#929292');
 
     // Left highlight
-    b(-11, -24, 4, 24, '#7E7E7E');
-    b(-7, -30, 4, 8, '#8A8A8A');
+    b(-11, -24, 4, 24, '#909090');
+    b(-7, -30, 4, 8, '#989898');
 
     // Right shadow
-    b(5, -24, 6, 26, '#525252');
-    b(7, -28, 4, 6, '#4A4A4A');
+    b(5, -24, 6, 26, '#606060');
+    b(7, -28, 4, 6, '#585858');
 
     // Snow on top
     b(-6, -32, 12, 2, '#F4F4F4');
     b(-8, -30, 16, 2, '#EAEAEA');
 
     // Cross
-    b(-1, -26, 2, 16, '#3A3A3A');
-    b(-5, -22, 10, 2, '#3A3A3A');
+    b(-1, -26, 2, 16, '#444');
+    b(-5, -22, 10, 2, '#444');
 
     // Small flowers at base
     b(-14, -1, 3, 3, '#DD6688');
@@ -305,7 +322,7 @@ function drawTombstone(x, y, score) {
     b(8, -1, 3, 3, '#DD6688');
 
     // Text
-    ctx.fillStyle = '#2A2A2A';
+    ctx.fillStyle = '#333';
     ctx.font = 'bold 7px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -316,21 +333,48 @@ function drawTombstone(x, y, score) {
 }
 
 function drawPowerupPickup(p) {
-    const bob = Math.sin(Date.now() / 400 + p.bobOffset) * 4;
+    // Embossed metallic coin
+    const bob = Math.sin(Date.now() / 400 + p.bobOffset) * 3;
+    const cx = p.x, cy = p.y + bob;
+    const r = p.radius;
+
     ctx.save();
-    ctx.shadowColor = POWERUP_COLORS[p.type];
-    ctx.shadowBlur = 16;
-    ctx.fillStyle = POWERUP_COLORS[p.type];
-    ctx.beginPath(); ctx.arc(p.x, p.y + bob, p.radius, 0, Math.PI*2); ctx.fill();
-    ctx.strokeStyle = '#FFF'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = '#000';
-    ctx.font = `bold ${p.radius * 0.9}px Courier New`;
+    const m = COIN_METALS[p.type];
+
+    // Drop shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath(); ctx.arc(cx + 1, cy + 2, r + 1, 0, Math.PI*2); ctx.fill();
+
+    // Bottom-right raised edge (dark = shadow side)
+    ctx.fillStyle = m.dark;
+    ctx.beginPath(); ctx.arc(cx + 1, cy + 1, r, 0, Math.PI*2); ctx.fill();
+
+    // Top-left raised edge (light = catch-light)
+    ctx.fillStyle = m.hi;
+    ctx.beginPath(); ctx.arc(cx - 0.5, cy - 0.5, r, 0, Math.PI*2); ctx.fill();
+
+    // Main coin face
+    ctx.fillStyle = m.face;
+    ctx.beginPath(); ctx.arc(cx, cy, r - 2, 0, Math.PI*2); ctx.fill();
+
+    // Inner stamped rim
+    ctx.strokeStyle = m.rim;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(cx, cy, r - 5, 0, Math.PI*2); ctx.stroke();
+
+    // Embossed letter (shadow then highlight for raised effect)
+    ctx.font = `bold ${r * 0.9}px "Orbitron", monospace`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(POWERUP_LABELS[p.type], p.x, p.y + bob);
+    ctx.fillStyle = m.letter;
+    ctx.fillText(POWERUP_LABELS[p.type], cx + 0.8, cy + 0.8);
+    ctx.fillStyle = m.hi;
+    ctx.fillText(POWERUP_LABELS[p.type], cx - 0.3, cy - 0.3);
+
     ctx.textBaseline = 'alphabetic';
     ctx.restore();
 }
+
+// ─── Character drawing ───────────────────────────────────────────────────────
 
 function drawSkier() {
     ctx.save();
@@ -350,17 +394,24 @@ function drawSkier() {
         ctx.fillRect(-12 + jumpHeight/20, jumpHeight + 6, Math.max(4, 24 - jumpHeight/8), 4);
     }
 
+    const isSB = playerType === 'snowboarder';
+
     // ── Crashed state ─────────────────────────────────────────────────────────
     if (gameState === 'crashed') {
         const b = (dx, dy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(dx, dy, w, h); };
-        // Sprawled body
-        b(-16, -6, 32,  8, '#1B52C0');   // jacket flat
+        const jCol = isSB ? '#1B8B6B' : '#1B52C0';
+        b(-16, -6, 32,  8, jCol);        // jacket flat
         b( -6, -8, 12,  6, '#FFCC88');   // face sideways
         b( -4,-10,  8,  4, '#CC0000');   // hat above head
         b( -3,-12,  6,  2, '#FFFFFF');   // pom pom
-        // Scattered skis
-        ctx.save(); ctx.rotate( 0.45); b(-18, 12, 26, 3, '#CC1100'); ctx.restore();
-        ctx.save(); ctx.rotate(-0.35); b(  4, 14, 26, 3, '#CC1100'); ctx.restore();
+        if (isSB) {
+            // Scattered snowboard
+            ctx.save(); ctx.rotate(0.3); b(-15, 14, 30, 3, '#2E60CC'); ctx.restore();
+        } else {
+            // Scattered skis
+            ctx.save(); ctx.rotate( 0.45); b(-18, 12, 26, 3, '#CC1100'); ctx.restore();
+            ctx.save(); ctx.rotate(-0.35); b(  4, 14, 26, 3, '#CC1100'); ctx.restore();
+        }
         ctx.restore();
         return;
     }
@@ -372,100 +423,134 @@ function drawSkier() {
     const ang = skier.angle;
     const hardTurn = Math.abs(ang) > 1.0;
 
-    // ── SKI POLES ─────────────────────────────────────────────────────────────
-    // Draw behind body first.  Each pole is a row of 2×2 px dots.
-    const drawPole = (startX, startY, stepX, stepY, steps) => {
-        for (let i = 0; i < steps; i++) {
-            b(startX + i*stepX, startY + i*stepY, 2, 2, '#9B8B30');
-        }
-    };
-    // Left pole (visible unless hard-turning right)
-    if (ang <= 0.8) {
-        drawPole(-10, -8,  -2, 2, 9);   // shaft
-        b(-28, 9, 6, 2, '#B0B070');      // basket
-    }
-    // Right pole (visible unless hard-turning left)
-    if (ang >= -0.8) {
-        drawPole( 8, -8,  2, 2, 9);
-        b( 22, 9, 6, 2, '#B0B070');
+    // ── EQUIPMENT: SKI POLES (skier only) ─────────────────────────────────────
+    if (!isSB) {
+        const drawPole = (startX, startY, stepX, stepY, steps) => {
+            for (let i = 0; i < steps; i++) {
+                b(startX + i*stepX, startY + i*stepY, 2, 2, '#A89830');
+            }
+        };
+        if (ang <= 0.8)  { drawPole(-10, -8, -2, 2, 9); b(-28, 9, 6, 2, '#C0C070'); }
+        if (ang >= -0.8) { drawPole(  8, -8,  2, 2, 9); b( 22, 9, 6, 2, '#C0C070'); }
     }
 
-    // ── SKIS ─────────────────────────────────────────────────────────────────
-    if (!hardTurn) {
-        // Parallel skis pointing downhill
-        b(-12, 13, 2, 4, '#EE3311');   // left tip (raised, lighter)
-        b(-10, 15, 8, 2, '#CC1100');   // left ski
-        b(  2, 15, 8, 2, '#CC1100');   // right ski
-        b( 10, 13, 2, 4, '#EE3311');   // right tip
-        b( -9, 15, 2, 2, '#FF4422');   // binding highlight L
-        b(  3, 15, 2, 2, '#FF4422');   // binding highlight R
+    // ── FOOTWEAR ──────────────────────────────────────────────────────────────
+    if (isSB) {
+        // Snowboard
+        if (!hardTurn) {
+            b(-14, 16, 28, 3, '#2E60CC');   // board main
+            b(-14, 16, 28, 1, '#4080EE');   // top edge highlight
+            b(-14, 18, 28, 1, '#1A3888');   // bottom edge
+            b(-16, 16,  3, 3, '#4080EE');   // nose
+            b( 13, 16,  3, 3, '#4080EE');   // tail
+            b( -5, 14,  4, 3, '#333');      // front binding
+            b(  3, 14,  4, 3, '#333');      // rear binding
+        } else {
+            const dir = ang > 0 ? 1 : -1;
+            b(-12 * dir - 3, 15, 28, 2, '#2E60CC');
+            b(-12 * dir - 3, 14,  4, 3, '#4080EE');
+        }
     } else {
-        // Edging turn: skis appear foreshortened / angled
-        const dir = ang > 0 ? 1 : -1;
-        b(-10 * dir - 5, 14, 24, 2, '#CC1100');  // wide single ski strip
-        b(-10 * dir - 5, 12,  4, 4, '#EE3311');  // uphill tip
+        // Skis
+        if (!hardTurn) {
+            b(-12, 13, 2, 4, '#EE4422');   // left tip
+            b(-10, 15, 8, 2, '#DD2200');   // left ski
+            b(  2, 15, 8, 2, '#DD2200');   // right ski
+            b( 10, 13, 2, 4, '#EE4422');   // right tip
+            b( -9, 15, 2, 2, '#FF5533');   // binding L
+            b(  3, 15, 2, 2, '#FF5533');   // binding R
+        } else {
+            const dir = ang > 0 ? 1 : -1;
+            b(-10 * dir - 5, 14, 24, 2, '#DD2200');
+            b(-10 * dir - 5, 12,  4, 4, '#EE4422');
+        }
     }
 
     // ── BOOTS ────────────────────────────────────────────────────────────────
-    b(-7, 9, 5, 6, '#1A1A30');   // left boot
-    b( 2, 9, 5, 6, '#1A1A30');   // right boot
-    b(-6, 9, 2, 3, '#2E2E50');   // boot highlight L
-    b( 3, 9, 2, 3, '#2E2E50');   // boot highlight R
+    if (isSB) {
+        b(-5, 10, 4, 6, '#2A2A3A');   // left boot (bulkier)
+        b( 2, 10, 4, 6, '#2A2A3A');   // right boot
+        b(-4, 10, 2, 3, '#3A3A50');
+        b( 3, 10, 2, 3, '#3A3A50');
+    } else {
+        b(-7, 9, 5, 6, '#222238');
+        b( 2, 9, 5, 6, '#222238');
+        b(-6, 9, 2, 3, '#333350');
+        b( 3, 9, 2, 3, '#333350');
+    }
 
     // ── PANTS / LEGS ─────────────────────────────────────────────────────────
-    b(-6,  1, 4, 9, '#0B3484');
-    b( 2,  1, 4, 9, '#0B3484');
-    b(-5,  1, 2, 5, '#1448A8');   // highlight L
-    b( 3,  1, 2, 5, '#1448A8');   // highlight R
-    b(-6,  8, 4, 2, '#09286E');   // cuff shadow
-    b( 2,  8, 4, 2, '#09286E');
+    b(-6,  1, 4, 9, '#1040A0');
+    b( 2,  1, 4, 9, '#1040A0');
+    b(-5,  1, 2, 5, '#1858C0');   // highlight L
+    b( 3,  1, 2, 5, '#1858C0');   // highlight R
+    b(-6,  8, 4, 2, '#0A3080');   // cuff shadow
+    b( 2,  8, 4, 2, '#0A3080');
 
     // ── JACKET ───────────────────────────────────────────────────────────────
-    const jMain = boostActive ? '#D06000' : '#1B52C0';
-    const jHi   = boostActive ? '#F08820' : '#2868E0';
-    const jSh   = boostActive ? '#904000' : '#112E80';
+    let jMain, jHi, jSh;
+    if (boostActive) {
+        jMain = '#D06000'; jHi = '#F08820'; jSh = '#904000';
+    } else if (isSB) {
+        jMain = '#1B8B6B'; jHi = '#28A880'; jSh = '#126048';
+    } else {
+        jMain = '#2060D0'; jHi = '#3878F0'; jSh = '#1440A0';
+    }
     b( -7,-14, 14, 16, jMain);   // main torso
     b( -7,-14,  2, 16, jSh);     // left shadow
     b(  5,-14,  2, 16, jSh);     // right shadow
     b( -5,-14, 10,  2, jHi);     // shoulder highlight
     b( -3, -6,  6,  2, jSh);     // chest pocket line
-    // Sleeves (arms extend out toward poles)
-    b(-12, -9,  6,  6, jMain);   // left sleeve
-    b(  6, -9,  6,  6, jMain);   // right sleeve
-    b(-12, -9,  2,  6, jSh);     // sleeve shadow L
-    b( 10, -9,  2,  6, jSh);     // sleeve shadow R
-    // Gloves
-    b(-12, -5,  4,  4, '#E8D8B0');  // left glove
-    b(  8, -5,  4,  4, '#E8D8B0');  // right glove
+
+    // Sleeves
+    if (isSB) {
+        // Snowboarder arms – wider, no poles
+        b(-14, -10,  8,  6, jMain);  // left sleeve
+        b(  6, -10,  8,  6, jMain);  // right sleeve
+        b(-14, -10,  2,  6, jSh);
+        b( 12, -10,  2,  6, jSh);
+        // Gloves
+        b(-14, -6,  4,  4, '#E8D8B0');
+        b( 10, -6,  4,  4, '#E8D8B0');
+    } else {
+        // Skier arms – toward poles
+        b(-12, -9,  6,  6, jMain);
+        b(  6, -9,  6,  6, jMain);
+        b(-12, -9,  2,  6, jSh);
+        b( 10, -9,  2,  6, jSh);
+        // Gloves
+        b(-12, -5,  4,  4, '#E8D8B0');
+        b(  8, -5,  4,  4, '#E8D8B0');
+    }
 
     // ── NECK ─────────────────────────────────────────────────────────────────
     b( -2,-16,  4,  4, '#FFCC88');
 
     // ── HEAD / FACE ──────────────────────────────────────────────────────────
     b( -5,-24, 10,  9, '#FFCC88');  // face
-    b( -5,-24,  2,  9, '#E8A866');  // left shadow
-    b(  3,-24,  2,  9, '#E8A866');  // right shadow
-    b( -5,-16, 10,  1, '#C88040');  // chin shadow
+    b( -5,-24,  2,  9, '#EAB070');  // left shadow
+    b(  3,-24,  2,  9, '#EAB070');  // right shadow
+    b( -5,-16, 10,  1, '#CC8848');  // chin shadow
 
     // ── GOGGLES ──────────────────────────────────────────────────────────────
-    b( -5,-23, 10,  1, '#1A1A1A');  // strap top
-    b( -5,-19,  1,  4, '#1A1A1A');  // frame left edge
-    b(  4,-19,  1,  4, '#1A1A1A');  // frame right edge
-    b( -4,-22,  3,  4, '#D4A800');  // left lens
-    b(  1,-22,  3,  4, '#D4A800');  // right lens
-    b( -1,-22,  2,  3, '#222222');  // nose bridge
+    b( -5,-23, 10,  1, '#222');     // strap top
+    b( -5,-19,  1,  4, '#222');     // frame left
+    b(  4,-19,  1,  4, '#222');     // frame right
+    b( -4,-22,  3,  4, '#E0B800');  // left lens
+    b(  1,-22,  3,  4, '#E0B800');  // right lens
+    b( -1,-22,  2,  3, '#333');     // nose bridge
     b( -3,-22,  1,  1, '#FFE860');  // left glint
     b(  2,-22,  1,  1, '#FFE860');  // right glint
-    b( -5,-19, 10,  1, '#1A1A1A');  // strap bottom
+    b( -5,-19, 10,  1, '#222');     // strap bottom
 
     // ── HAT (knit cap) ───────────────────────────────────────────────────────
-    b( -5,-26, 10,  3, '#AA0000');  // brim band / cuff
-    b( -4,-32,  8,  6, '#CC0000');  // hat body
-    b( -3,-32,  4,  6, '#DD1111');  // highlight stripe
-    b( -4,-28,  8,  2, '#FF6666');  // white stripe on hat
+    b( -5,-26, 10,  3, '#BB0000');  // brim band
+    b( -4,-32,  8,  6, '#DD1010');  // hat body
+    b( -3,-32,  4,  6, '#EE2222');  // highlight stripe
+    b( -4,-28,  8,  2, '#FF7777');  // pattern stripe
     // Pom pom
     b( -3,-35,  6,  3, '#F8F8F8');
-    b( -2,-37,  4,  2, '#E0E0E0');
+    b( -2,-37,  4,  2, '#E8E8E8');
     b( -1,-38,  2,  1, '#FFFFFF');
 
     ctx.restore();
@@ -478,11 +563,11 @@ function drawYeti() {
 
     const still  = yeti.frozen || yeti.stunned;
     const bounce = still ? 0 : Math.sin(Date.now() / 110) * 4;
-    const bk = bounce | 0;   // integer offset for fillRect
+    const bk = bounce | 0;
 
     const fur  = yeti.frozen ? '#B8D8EE' : '#E8E8F4';
-    const fur2 = yeti.frozen ? '#8AB8D0' : '#C0C0D0';   // shadow/underside
-    const fur3 = yeti.frozen ? '#D4ECF8' : '#F4F4FF';   // highlight
+    const fur2 = yeti.frozen ? '#8AB8D0' : '#C0C0D0';
+    const fur3 = yeti.frozen ? '#D4ECF8' : '#F4F4FF';
     const eyeC = yeti.frozen ? '#4488FF' : '#FF2200';
 
     const b = (dx, dy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(dx, dy + bk, w, h); };
@@ -493,14 +578,12 @@ function drawYeti() {
 
     // ── LEGS ─────────────────────────────────────────────────────────────────
     const ls = still ? 0 : Math.sin(Date.now() / 105) * 7;
-    // Left leg
     b(-20, 24 + (ls|0), 16, 28, fur);
-    b(-20, 24 + (ls|0),  4, 28, fur2);   // inner shadow
-    b(-20, 48 + (ls|0), 18,  6, fur2);   // foot
-    b(-22, 50 + (ls|0),  6,  4, '#606070'); // claws
+    b(-20, 24 + (ls|0),  4, 28, fur2);
+    b(-20, 48 + (ls|0), 18,  6, fur2);
+    b(-22, 50 + (ls|0),  6,  4, '#606070');
     b(-16, 52 + (ls|0),  4,  4, '#606070');
     b(-10, 51 + (ls|0),  4,  4, '#606070');
-    // Right leg
     b(  4, 24 - (ls|0), 16, 28, fur);
     b( 16, 24 - (ls|0),  4, 28, fur2);
     b(  2, 48 - (ls|0), 18,  6, fur2);
@@ -509,84 +592,74 @@ function drawYeti() {
     b(  6, 51 - (ls|0),  4,  4, '#606070');
 
     // ── TORSO ────────────────────────────────────────────────────────────────
-    b(-24, -14, 48, 40, fur);            // main body
-    b(-24, -14,  6, 40, fur2);           // left shadow
-    b( 18, -12,  6, 38, fur2);           // right shadow
-    b(-18, -14, 36,  6, fur3);           // shoulder highlight
-    b(-10,   4, 20, 16, fur2);           // belly
+    b(-24, -14, 48, 40, fur);
+    b(-24, -14,  6, 40, fur2);
+    b( 18, -12,  6, 38, fur2);
+    b(-18, -14, 36,  6, fur3);
+    b(-10,   4, 20, 16, fur2);
 
     // ── ARMS ─────────────────────────────────────────────────────────────────
     const as = still ? 0 : Math.sin(Date.now() / 160) * 8;
-    // Left arm
     b(-44, -10 + (as|0), 22, 14, fur);
     b(-44, -10 + (as|0),  6, 14, fur2);
-    // Left claws
     b(-50,   0 + (as|0),  8,  4, '#606070');
     b(-44,   2 + (as|0),  4,  5, '#606070');
     b(-38,   1 + (as|0),  4,  5, '#606070');
-    // Right arm
     b( 22, -10 - (as|0), 22, 14, fur);
     b( 38, -10 - (as|0),  6, 14, fur2);
-    // Right claws
     b( 42,   0 - (as|0),  8,  4, '#606070');
     b( 40,   2 - (as|0),  4,  5, '#606070');
     b( 34,   1 - (as|0),  4,  5, '#606070');
 
     // ── HEAD ─────────────────────────────────────────────────────────────────
-    b(-22, -52, 44, 40, fur);            // head block
-    b(-22, -52,  6, 40, fur2);           // left shadow
-    b( 16, -50,  6, 38, fur2);           // right shadow
-    b(-16, -52, 32,  4, fur3);           // forehead highlight
-    // Ears
+    b(-22, -52, 44, 40, fur);
+    b(-22, -52,  6, 40, fur2);
+    b( 16, -50,  6, 38, fur2);
+    b(-16, -52, 32,  4, fur3);
     b(-30, -44, 10, 12, fur);
     b(-30, -44,  4, 12, fur2);
     b( 20, -44, 10, 12, fur);
     b( 26, -44,  4, 12, fur2);
-    // Ear inner
     b(-28, -42,  6,  8, '#E8A0B0');
     b( 22, -42,  6,  8, '#E8A0B0');
 
-    // ── BROW (menacing angled ridge) ─────────────────────────────────────────
+    // ── BROW ─────────────────────────────────────────────────────────────────
     b(-18, -40, 14,  5, fur2);
     b(  4, -40, 14,  5, fur2);
-    b(-14, -42,  8,  3, '#909099');   // angled highlight
+    b(-14, -42,  8,  3, '#909099');
     b(  6, -42,  8,  3, '#909099');
 
     // ── EYES ─────────────────────────────────────────────────────────────────
-    b(-16, -38, 12, 12, '#111');       // left socket
-    b(  4, -38, 12, 12, '#111');       // right socket
-    b(-14, -36,  8,  8, eyeC);         // left iris
-    b(  6, -36,  8,  8, eyeC);         // right iris
-    b(-13, -35,  3,  3, '#FF8888');    // left glint
+    b(-16, -38, 12, 12, '#111');
+    b(  4, -38, 12, 12, '#111');
+    b(-14, -36,  8,  8, eyeC);
+    b(  6, -36,  8,  8, eyeC);
+    b(-13, -35,  3,  3, '#FF8888');
     b(  7, -35,  3,  3, '#FF8888');
-    b(-12, -34,  2,  2, '#FFFFFF');    // pupil reflection
+    b(-12, -34,  2,  2, '#FFFFFF');
     b(  8, -34,  2,  2, '#FFFFFF');
 
     // ── NOSE ─────────────────────────────────────────────────────────────────
     b( -8, -24, 16, 10, fur2);
     b( -6, -24, 12,  8, '#B090B0');
     b( -4, -24,  8,  4, '#C8A0C8');
-    b( -6, -18,  4,  4, '#555');       // nostrils
+    b( -6, -18,  4,  4, '#555');
     b(  2, -18,  4,  4, '#555');
 
     // ── MOUTH ────────────────────────────────────────────────────────────────
-    b(-14, -14, 28, 12, '#1A1A1A');    // mouth cavity
-    b(-12, -14, 24,  4, '#2A1010');    // upper lip
-    // Fangs
+    b(-14, -14, 28, 12, '#1A1A1A');
+    b(-12, -14, 24,  4, '#2A1010');
     b(-12, -14,  4, 10, '#F4F0EC');
     b( -6, -14,  3,  8, '#F4F0EC');
     b(  3, -14,  3,  8, '#F4F0EC');
     b(  8, -14,  4, 10, '#F4F0EC');
-    // Lower teeth row
     b( -8,  -6, 16,  4, '#E0DCD8');
-    // Tongue
     b( -4,  -2,  8,  4, '#CC4466');
 
     // ── FROZEN ICE OVERLAY ───────────────────────────────────────────────────
     if (yeti.frozen) {
         ctx.fillStyle = 'rgba(100,200,255,0.25)';
         ctx.fillRect(-46, -58 + bk, 92, 118);
-        // Ice cracks
         ctx.strokeStyle = 'rgba(180,230,255,0.6)'; ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(-10, -50+bk); ctx.lineTo(5, -30+bk); ctx.lineTo(-5, -10+bk);
@@ -691,7 +764,6 @@ function usePowerup() {
         shieldTimer = 360;
 
     } else if (type === 'snowball') {
-        // Aimed toward yeti if active, otherwise straight up
         let vx = 0, vy = -10;
         if (yeti.active) {
             const dx = yeti.x - skier.x;
@@ -739,6 +811,169 @@ function checkAndSaveHighScore() {
     }
 }
 
+// ─── Character selection screen ───────────────────────────────────────────────
+
+function drawCharSelect() {
+    // Background
+    ctx.fillStyle = '#0E1628';
+    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+    // Subtle snow ground
+    ctx.fillStyle = '#141E38';
+    ctx.fillRect(0, GAME_HEIGHT * 0.72, GAME_WIDTH, GAME_HEIGHT * 0.28);
+
+    // Animated snow
+    drawSnow();
+
+    // Title with glow
+    ctx.save();
+    ctx.shadowColor = '#00AAFF';
+    ctx.shadowBlur = 20;
+    ctx.fillStyle = '#00DDFF';
+    ctx.font = 'bold 44px "Orbitron", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('FROSTBYTE', GAME_WIDTH/2, 68);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+
+    // Subtitle
+    ctx.fillStyle = '#88BBDD';
+    ctx.font = '16px "Orbitron", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('CHOOSE YOUR RIDE', GAME_WIDTH/2, 100);
+
+    // High score display
+    if (highScore > 0) {
+        ctx.fillStyle = '#556688';
+        ctx.font = '12px "Orbitron", sans-serif';
+        ctx.fillText('Best: ' + highScore + 'm', GAME_WIDTH/2, 120);
+    }
+
+    // Panel dimensions
+    const pw = 170, ph = 250;
+    const gap = 30;
+    const leftX = GAME_WIDTH/2 - pw - gap/2;
+    const rightX = GAME_WIDTH/2 + gap/2;
+    const panelY = 140;
+
+    // Draw panels
+    drawSelectPanel(leftX, panelY, pw, ph, 'skier');
+    drawSelectPanel(rightX, panelY, pw, ph, 'snowboarder');
+
+    // Bottom text
+    ctx.fillStyle = '#5588AA';
+    ctx.font = '13px "Orbitron", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Click / Tap to select', GAME_WIDTH/2, panelY + ph + 30);
+}
+
+function drawSelectPanel(x, y, w, h, type) {
+    // Hover detection (simple highlight for whichever side the mouse is on)
+    const isLeft = type === 'skier';
+    const hovered = isLeft ? (lastPointerX < GAME_WIDTH/2) : (lastPointerX >= GAME_WIDTH/2);
+
+    // Panel background
+    ctx.fillStyle = hovered ? 'rgba(0,60,100,0.5)' : 'rgba(10,25,50,0.6)';
+    ctx.fillRect(x, y, w, h);
+
+    // Panel border
+    ctx.strokeStyle = hovered ? '#00CCFF' : '#2A5A7A';
+    ctx.lineWidth = hovered ? 2.5 : 1.5;
+    ctx.strokeRect(x, y, w, h);
+
+    // Draw character preview at 2x scale
+    ctx.save();
+    ctx.translate(x + w/2, y + h/2 - 15);
+    ctx.scale(2.2, 2.2);
+    drawCharPreview(type);
+    ctx.restore();
+
+    // Label
+    ctx.fillStyle = hovered ? '#FFFFFF' : '#AACCDD';
+    ctx.font = 'bold 16px "Orbitron", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(type === 'skier' ? 'SKIER' : 'SNOWBOARD', x + w/2, y + h - 16);
+}
+
+// Track last pointer position for hover effects on char select
+let lastPointerX = GAME_WIDTH / 2;
+
+function drawCharPreview(type) {
+    const b = (dx, dy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(dx, dy, w, h); };
+    const isSB = type === 'snowboarder';
+
+    // Equipment
+    if (isSB) {
+        // Snowboard
+        b(-14, 16, 28, 3, '#2E60CC');
+        b(-14, 16, 28, 1, '#4080EE');
+        b(-16, 16,  3, 3, '#4080EE');
+        b( 13, 16,  3, 3, '#4080EE');
+        b( -5, 14,  4, 3, '#333');
+        b(  3, 14,  4, 3, '#333');
+    } else {
+        // Poles
+        for (let i = 0; i < 9; i++) { b(-10 + i*-2, -8 + i*2, 2, 2, '#A89830'); }
+        b(-28, 9, 6, 2, '#C0C070');
+        for (let i = 0; i < 9; i++) { b(8 + i*2, -8 + i*2, 2, 2, '#A89830'); }
+        b( 22, 9, 6, 2, '#C0C070');
+        // Skis
+        b(-12, 13, 2, 4, '#EE4422');
+        b(-10, 15, 8, 2, '#DD2200');
+        b(  2, 15, 8, 2, '#DD2200');
+        b( 10, 13, 2, 4, '#EE4422');
+    }
+
+    // Boots
+    b(isSB ? -5 : -7, isSB ? 10 : 9, isSB ? 4 : 5, 6, '#222238');
+    b(2, isSB ? 10 : 9, isSB ? 4 : 5, 6, '#222238');
+
+    // Pants
+    b(-6, 1, 4, 9, '#1040A0');
+    b( 2, 1, 4, 9, '#1040A0');
+    b(-5, 1, 2, 5, '#1858C0');
+    b( 3, 1, 2, 5, '#1858C0');
+
+    // Jacket
+    const jMain = isSB ? '#1B8B6B' : '#2060D0';
+    const jHi   = isSB ? '#28A880' : '#3878F0';
+    const jSh   = isSB ? '#126048' : '#1440A0';
+    b(-7,-14, 14, 16, jMain);
+    b(-7,-14,  2, 16, jSh);
+    b( 5,-14,  2, 16, jSh);
+    b(-5,-14, 10,  2, jHi);
+
+    // Arms
+    if (isSB) {
+        b(-14,-10, 8, 6, jMain); b( 6,-10, 8, 6, jMain);
+        b(-14, -6, 4, 4, '#E8D8B0'); b(10, -6, 4, 4, '#E8D8B0');
+    } else {
+        b(-12, -9, 6, 6, jMain); b( 6, -9, 6, 6, jMain);
+        b(-12, -5, 4, 4, '#E8D8B0'); b( 8, -5, 4, 4, '#E8D8B0');
+    }
+
+    // Neck + Head
+    b(-2,-16, 4, 4, '#FFCC88');
+    b(-5,-24, 10, 9, '#FFCC88');
+    b(-5,-24, 2, 9, '#EAB070');
+    b( 3,-24, 2, 9, '#EAB070');
+
+    // Goggles
+    b(-4,-22, 3, 4, '#E0B800');
+    b( 1,-22, 3, 4, '#E0B800');
+    b(-1,-22, 2, 3, '#333');
+    b(-3,-22, 1, 1, '#FFE860');
+    b( 2,-22, 1, 1, '#FFE860');
+
+    // Hat
+    b(-5,-26, 10, 3, '#BB0000');
+    b(-4,-32, 8, 6, '#DD1010');
+    b(-3,-32, 4, 6, '#EE2222');
+    b(-3,-35, 6, 3, '#F8F8F8');
+    b(-2,-37, 4, 2, '#E8E8E8');
+    b(-1,-38, 2, 1, '#FFFFFF');
+}
+
 // ─── HUD ──────────────────────────────────────────────────────────────────────
 
 function drawPowerupHUD() {
@@ -748,10 +983,9 @@ function drawPowerupHUD() {
     ctx.fillStyle = 'rgba(5,15,30,0.72)';
     ctx.fillRect(hx, hy, 138, 46);
 
-    // Border (colour matches held power-up or icy default)
+    // Border
     ctx.strokeStyle = heldPowerup ? POWERUP_COLORS[heldPowerup] : '#2A6080';
     ctx.lineWidth = 2; ctx.strokeRect(hx, hy, 138, 46);
-    // Inner glow border
     ctx.strokeStyle = heldPowerup
         ? POWERUP_COLORS[heldPowerup] + '33'
         : 'rgba(42,96,128,0.2)';
@@ -762,11 +996,9 @@ function drawPowerupHUD() {
     ctx.fillText('POWER-UP', hx + 6, hy + 14);
 
     if (heldPowerup) {
-        // Coloured power-up bar
         const col = POWERUP_COLORS[heldPowerup];
         ctx.fillStyle = col;
         ctx.fillRect(hx + 5, hy + 20, 128, 20);
-        // Dark text on bar
         ctx.fillStyle = '#000'; ctx.font = 'bold 11px "Orbitron", "Courier New", monospace';
         ctx.fillText(heldPowerup.toUpperCase() + '  [E]', hx + 9, hy + 34);
     } else {
@@ -774,7 +1006,7 @@ function drawPowerupHUD() {
         ctx.fillText('- empty -', hx + 6, hy + 34);
     }
 
-    // Active timer badges (stacked above the HUD box)
+    // Active timer badges
     let ty = hy - 6;
     const badge = (label, col, sec) => {
         ctx.fillStyle = 'rgba(5,15,30,0.6)';
@@ -792,32 +1024,26 @@ function drawPowerupHUD() {
 }
 
 function drawMobileButtons() {
-    // Jump button – bottom right, icy styled
     const x = GAME_WIDTH - 44;
     const y = GAME_HEIGHT - 44;
     const r = 32;
 
     ctx.save();
 
-    // Outer glow
     ctx.shadowColor = '#00AADD';
     ctx.shadowBlur = 14;
 
-    // Button body
     ctx.fillStyle = 'rgba(0,30,60,0.6)';
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
 
-    // Border ring
     ctx.strokeStyle = '#00CCFF'; ctx.lineWidth = 2.5;
     ctx.stroke();
 
     ctx.shadowBlur = 0;
 
-    // Inner ring accent
     ctx.strokeStyle = 'rgba(0,180,255,0.25)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(x, y, r - 6, 0, Math.PI*2); ctx.stroke();
 
-    // Label
     ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 12px "Orbitron", "Courier New", monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('JUMP', x, y);
@@ -829,11 +1055,13 @@ function drawMobileButtons() {
 // ─── Update ───────────────────────────────────────────────────────────────────
 
 function update() {
-    if (gameState === 'crashed' || gameState === 'caught') return;
+    // Always animate snow (even on menus)
+    updateSnow();
+
+    if (gameState === 'charselect' || gameState === 'crashed' || gameState === 'caught') return;
 
     // Steering – relative touch takes priority, then mouse, then keyboard
     if (useRelativeTouch) {
-        // Drag delta of ~40 px = max angle of 2
         skier.angle = Math.max(-2, Math.min(2, touchDeltaX / 40));
     } else if (useMouseControl) {
         const diff = mouseX - skier.x;
@@ -906,7 +1134,7 @@ function update() {
     obstacles     = obstacles.filter(o => o.y > -50 && !o.destroyed);
     powerupPickups = powerupPickups.filter(p => p.y > -50);
 
-    // Spawn obstacles & power-ups (scaled by difficulty so start feels open)
+    // Spawn obstacles & power-ups
     const spd = speed / 5;
     if (Math.random() < TREE_SPAWN_RATE    * spd * difficulty) spawnObstacle(GAME_HEIGHT + 50);
     if (Math.random() < ROCK_SPAWN_RATE    * spd * difficulty) spawnObstacle(GAME_HEIGHT + 50);
@@ -939,10 +1167,8 @@ function update() {
     for (let i = powerupProjectiles.length - 1; i >= 0; i--) {
         const proj = powerupProjectiles[i];
         proj.x += proj.vx;
-        // scrollCompensation keeps projectile at same world-position as it flies
         proj.y += proj.vy - speed * 0.5;
 
-        // Bomb fuse countdown
         if (proj.type === 'bomb') {
             proj.timer--;
             if (proj.timer <= 0) {
@@ -952,7 +1178,6 @@ function update() {
             }
         }
 
-        // Hit yeti
         if (yeti.active && !yeti.frozen && !yeti.stunned) {
             const dx = proj.x - yeti.x, dy = proj.y - yeti.y;
             if (Math.sqrt(dx*dx + dy*dy) < 50) {
@@ -962,7 +1187,6 @@ function update() {
             }
         }
 
-        // Hit obstacle
         let hitObstacle = false;
         for (const obs of obstacles) {
             if (obs.type === 'jump') continue;
@@ -973,7 +1197,6 @@ function update() {
         }
         if (hitObstacle) { powerupProjectiles.splice(i, 1); continue; }
 
-        // Cull
         if (proj.y < -80 || proj.y > GAME_HEIGHT + 80 || proj.x < -80 || proj.x > GAME_WIDTH + 80) {
             powerupProjectiles.splice(i, 1);
         }
@@ -981,7 +1204,6 @@ function update() {
 
     // ── Yeti logic ────────────────────────────────────────────────────────────
 
-    // Yeti first appears at 5000 m
     if (distance > 5000 && !yeti.active && yeti.retreatCooldown <= 0) {
         yeti.active = true;
         yeti.x = Math.random() * GAME_WIDTH;
@@ -990,7 +1212,6 @@ function update() {
         yeti.frozen  = false;
     }
 
-    // Tick retreat cooldown (distance-based)
     if (!yeti.active && yeti.retreatCooldown > 0) {
         yeti.retreatCooldown -= speed * 0.5;
         if (yeti.retreatCooldown < 0) yeti.retreatCooldown = 0;
@@ -1005,32 +1226,32 @@ function update() {
                 yeti.y += (dy/dist) * yeti.speed - speed * 0.7;
             }
         } else if (yeti.stunned) {
-            // Stumble backward while stunned
             yeti.y -= speed * 0.4;
         }
 
-        // Yeti gradually speeds up the longer it chases
         yeti.speed = Math.min(8, 4 + (distance - 5000) / 2000);
 
-        // Skier outran yeti – yeti goes far off the top of the screen
         if (yeti.y < -350) {
             yeti.active = false;
-            yeti.retreatCooldown = 3000; // skier must travel 3000 m before yeti returns
+            yeti.retreatCooldown = 3000;
         }
 
-        // Catch the skier
         if (checkYetiCollision() && jumpHeight < 20 && !shieldActive) {
             gameState = 'caught';
             checkAndSaveHighScore();
         }
     }
-
-    updateSnow();
 }
 
 // ─── Render ───────────────────────────────────────────────────────────────────
 
 function render() {
+    // Character selection screen
+    if (gameState === 'charselect') {
+        drawCharSelect();
+        return;
+    }
+
     // Snow background
     ctx.fillStyle = '#E8E8E8';
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
@@ -1039,7 +1260,7 @@ function render() {
     const sorted = [...obstacles].sort((a, b) => a.y - b.y);
     sorted.forEach(obs => {
         if (obs.y > -50 && obs.y < GAME_HEIGHT + 50) {
-            if      (obs.type === 'tree') drawTree(obs.x, obs.y);
+            if      (obs.type === 'tree') drawTree(obs.x, obs.y, obs.snowy);
             else if (obs.type === 'rock') drawRock(obs.x, obs.y);
             else if (obs.type === 'jump') drawJump(obs.x, obs.y);
         }
@@ -1058,7 +1279,7 @@ function render() {
     // Projectiles
     drawProjectiles();
 
-    // Skier
+    // Skier / Snowboarder
     drawSkier();
 
     // Yeti
@@ -1101,15 +1322,12 @@ function render() {
         ctx.fillStyle = gameState === 'caught' ? 'rgba(100,0,0,0.75)' : 'rgba(0,0,0,0.6)';
         ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-        // Title
         ctx.fillStyle = '#FFF'; ctx.font = 'bold 36px "Orbitron", "Courier New", monospace'; ctx.textAlign = 'center';
         ctx.fillText(gameState === 'caught' ? 'EATEN BY YETI!' : 'CRASHED!', GAME_WIDTH/2, GAME_HEIGHT/2 - 40);
 
-        // Distance
         ctx.font = '20px "Orbitron", "Courier New", monospace';
         ctx.fillText(`Distance: ${Math.floor(distance)}m`, GAME_WIDTH/2, GAME_HEIGHT/2 + 5);
 
-        // High score
         if (distance >= highScore && highScore > 0) {
             ctx.fillStyle = '#FFD700';
             ctx.font = 'bold 18px "Orbitron", "Courier New", monospace';
@@ -1120,7 +1338,6 @@ function render() {
             ctx.fillText(`Best: ${Math.floor(highScore)}m`, GAME_WIDTH/2, GAME_HEIGHT/2 + 35);
         }
 
-        // Restart prompt
         ctx.fillStyle = '#AAA';
         ctx.font = '16px "Orbitron", "Courier New", monospace';
         ctx.fillText('Tap / SPACE to restart', GAME_WIDTH/2, GAME_HEIGHT/2 + 70);
@@ -1143,10 +1360,15 @@ function resetGame() {
     powerupProjectiles = []; powerupPickups = [];
     tombstonePlaced = false;
     tombstoneObj = null;
-    // Re-read high score in case it was updated
     highScore = parseInt(localStorage.getItem('frostbyte_highscore') || '0', 10);
     highScoreX = parseInt(localStorage.getItem('frostbyte_highscore_x') || String(GAME_WIDTH / 2), 10);
     initObstacles();
+}
+
+function selectCharacter(type) {
+    playerType = type;
+    gameState = 'playing';
+    resetGame();
 }
 
 // ─── Game loop ────────────────────────────────────────────────────────────────
@@ -1160,6 +1382,12 @@ function gameLoop() {
 // ─── Keyboard input ───────────────────────────────────────────────────────────
 
 document.addEventListener('keydown', e => {
+    if (gameState === 'charselect') {
+        if (e.key === '1') { selectCharacter('skier'); return; }
+        if (e.key === '2') { selectCharacter('snowboarder'); return; }
+        return;
+    }
+
     useMouseControl = false;
     useRelativeTouch = false;
     switch (e.key.toLowerCase()) {
@@ -1191,14 +1419,25 @@ document.addEventListener('keyup', e => {
 
 canvas.addEventListener('mousemove', e => {
     const rect = canvas.getBoundingClientRect();
-    mouseX = (e.clientX - rect.left) / scale;
+    const mx = (e.clientX - rect.left) / scale;
+    lastPointerX = mx;  // for char select hover
+    if (gameState === 'charselect') return;
+    mouseX = mx;
     useMouseControl = true;
     useRelativeTouch = false;
 });
-canvas.addEventListener('click', () => {
+
+canvas.addEventListener('click', e => {
+    if (gameState === 'charselect') {
+        const rect = canvas.getBoundingClientRect();
+        const clickX = (e.clientX - rect.left) / scale;
+        selectCharacter(clickX < GAME_WIDTH / 2 ? 'skier' : 'snowboarder');
+        return;
+    }
     if (gameState === 'crashed' || gameState === 'caught') { resetGame(); return; }
     if (heldPowerup) usePowerup();
 });
+
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 // ─── Touch input (relative steering) ─────────────────────────────────────────
@@ -1216,6 +1455,13 @@ canvas.addEventListener('touchstart', e => {
     const touch = e.changedTouches[0];
     const pos   = getTouchPos(touch);
 
+    lastPointerX = pos.x;  // for char select hover
+
+    if (gameState === 'charselect') {
+        selectCharacter(pos.x < GAME_WIDTH / 2 ? 'skier' : 'snowboarder');
+        return;
+    }
+
     if (gameState === 'crashed' || gameState === 'caught') { resetGame(); return; }
 
     // Tap JUMP button area (bottom-right circle)
@@ -1229,7 +1475,7 @@ canvas.addEventListener('touchstart', e => {
         usePowerup(); return;
     }
 
-    // Begin relative drag steering – record the starting X
+    // Begin relative drag steering
     activeTouchId   = touch.identifier;
     touchStartX     = pos.x;
     touchDeltaX     = 0;
