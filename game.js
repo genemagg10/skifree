@@ -1,4 +1,4 @@
-// SkiFree Clone - Enhanced with Mobile Support, Yeti Chase Mechanics & Power-ups
+// Frost Byte - Enhanced with Mobile Support, Yeti Chase Mechanics & Power-ups
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const scoreDisplay = document.getElementById('score');
@@ -37,6 +37,12 @@ let maxSpeed = 15;
 let jumpHeight = 0;
 let jumpVelocity = 0;
 
+// High score (persisted in localStorage)
+let highScore = parseInt(localStorage.getItem('frostbyte_highscore') || '0', 10);
+let highScoreX = parseInt(localStorage.getItem('frostbyte_highscore_x') || String(GAME_WIDTH / 2), 10);
+let tombstonePlaced = false;
+let tombstoneObj = null;
+
 // Power-up state
 let heldPowerup = null;
 let powerupPickups = [];
@@ -57,9 +63,15 @@ const skier = {
     height: SKIER_SIZE * 1.5
 };
 
-// Mouse/touch position
+// Mouse position (absolute steering – desktop only)
 let mouseX = GAME_WIDTH / 2;
 let useMouseControl = false;
+
+// Relative touch steering – finger can start anywhere;
+// angle is driven by horizontal drag delta, not absolute position
+let touchStartX = null;
+let touchDeltaX = 0;
+let useRelativeTouch = false;
 
 // Obstacles
 let obstacles = [];
@@ -86,7 +98,6 @@ const keys = {
 
 // Touch state
 let activeTouchId = null;
-let touchCurrentX = null;
 
 // Power-up types & visuals
 const POWERUP_TYPES  = ['boost', 'snowball', 'shield', 'freeze', 'bomb'];
@@ -253,6 +264,55 @@ function drawJump(x, y) {
     // Arrow markers on ramp surface (show it's a jump)
     b( -2, -6,   4, 2, '#A07840');
     b( -3, -3,   6, 2, '#A07840');
+}
+
+function drawTombstone(x, y, score) {
+    // Pixel-art tombstone marking the player's previous high-score death location
+    const b = (dx, dy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(x+dx, y+dy, w, h); };
+
+    // Ground shadow
+    b(-16, 6, 32, 5, 'rgba(0,0,0,0.2)');
+
+    // Ground mound
+    b(-18, 2, 36, 8, '#8A8A7A');
+    b(-16, 0, 32, 4, '#9A9A8A');
+
+    // Tombstone body
+    b(-11, -24, 22, 28, '#686868');
+    b(-9, -28, 18, 6, '#727272');
+    b(-7, -30, 14, 4, '#7A7A7A');
+    b(-5, -32, 10, 4, '#828282');
+
+    // Left highlight
+    b(-11, -24, 4, 24, '#7E7E7E');
+    b(-7, -30, 4, 8, '#8A8A8A');
+
+    // Right shadow
+    b(5, -24, 6, 26, '#525252');
+    b(7, -28, 4, 6, '#4A4A4A');
+
+    // Snow on top
+    b(-6, -32, 12, 2, '#F4F4F4');
+    b(-8, -30, 16, 2, '#EAEAEA');
+
+    // Cross
+    b(-1, -26, 2, 16, '#3A3A3A');
+    b(-5, -22, 10, 2, '#3A3A3A');
+
+    // Small flowers at base
+    b(-14, -1, 3, 3, '#DD6688');
+    b(-10, 0, 3, 3, '#EEBB44');
+    b(8, -1, 3, 3, '#DD6688');
+
+    // Text
+    ctx.fillStyle = '#2A2A2A';
+    ctx.font = 'bold 7px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('RIP', x, y - 10);
+    ctx.font = '6px monospace';
+    ctx.fillText(Math.floor(score) + 'm', x, y - 2);
+    ctx.textBaseline = 'alphabetic';
 }
 
 function drawPowerupPickup(p) {
@@ -668,52 +728,102 @@ function explodeBomb(bx, by) {
     }
 }
 
+// ─── High score ───────────────────────────────────────────────────────────────
+
+function checkAndSaveHighScore() {
+    if (distance > highScore) {
+        highScore = Math.floor(distance);
+        highScoreX = Math.round(skier.x);
+        localStorage.setItem('frostbyte_highscore', String(highScore));
+        localStorage.setItem('frostbyte_highscore_x', String(highScoreX));
+    }
+}
+
 // ─── HUD ──────────────────────────────────────────────────────────────────────
 
 function drawPowerupHUD() {
-    const hx = 10, hy = GAME_HEIGHT - 52;
+    const hx = 10, hy = GAME_HEIGHT - 55;
 
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(hx, hy, 130, 42);
-    ctx.strokeStyle = heldPowerup ? POWERUP_COLORS[heldPowerup] : '#555';
-    ctx.lineWidth = 2; ctx.strokeRect(hx, hy, 130, 42);
+    // Background
+    ctx.fillStyle = 'rgba(5,15,30,0.72)';
+    ctx.fillRect(hx, hy, 138, 46);
 
-    ctx.fillStyle = '#CCC'; ctx.font = '11px Courier New'; ctx.textAlign = 'left';
-    ctx.fillText('POWER-UP:', hx + 5, hy + 14);
+    // Border (colour matches held power-up or icy default)
+    ctx.strokeStyle = heldPowerup ? POWERUP_COLORS[heldPowerup] : '#2A6080';
+    ctx.lineWidth = 2; ctx.strokeRect(hx, hy, 138, 46);
+    // Inner glow border
+    ctx.strokeStyle = heldPowerup
+        ? POWERUP_COLORS[heldPowerup] + '33'
+        : 'rgba(42,96,128,0.2)';
+    ctx.lineWidth = 1; ctx.strokeRect(hx + 2, hy + 2, 134, 42);
+
+    // Label
+    ctx.fillStyle = '#66BBDD'; ctx.font = 'bold 10px "Orbitron", "Courier New", monospace'; ctx.textAlign = 'left';
+    ctx.fillText('POWER-UP', hx + 6, hy + 14);
 
     if (heldPowerup) {
-        ctx.fillStyle = POWERUP_COLORS[heldPowerup];
-        ctx.fillRect(hx + 5, hy + 18, 120, 18);
-        ctx.fillStyle = '#000'; ctx.font = 'bold 12px Courier New';
-        ctx.fillText(heldPowerup.toUpperCase() + ' – USE [E]', hx + 8, hy + 31);
+        // Coloured power-up bar
+        const col = POWERUP_COLORS[heldPowerup];
+        ctx.fillStyle = col;
+        ctx.fillRect(hx + 5, hy + 20, 128, 20);
+        // Dark text on bar
+        ctx.fillStyle = '#000'; ctx.font = 'bold 11px "Orbitron", "Courier New", monospace';
+        ctx.fillText(heldPowerup.toUpperCase() + '  [E]', hx + 9, hy + 34);
     } else {
-        ctx.fillStyle = '#666'; ctx.font = '11px Courier New';
-        ctx.fillText('none', hx + 5, hy + 31);
+        ctx.fillStyle = '#334455'; ctx.font = '10px "Orbitron", "Courier New", monospace';
+        ctx.fillText('- empty -', hx + 6, hy + 34);
     }
 
-    // Active timers
+    // Active timer badges (stacked above the HUD box)
     let ty = hy - 6;
     const badge = (label, col, sec) => {
-        ctx.fillStyle = col; ctx.fillRect(hx, ty - 15, 100, 16);
-        ctx.fillStyle = '#000'; ctx.font = 'bold 11px Courier New';
-        ctx.fillText(label + ' ' + sec + 's', hx + 3, ty - 2);
-        ty -= 19;
+        ctx.fillStyle = 'rgba(5,15,30,0.6)';
+        ctx.fillRect(hx, ty - 16, 110, 18);
+        ctx.fillStyle = col;
+        ctx.fillRect(hx, ty - 16, 110, 18);
+        ctx.fillStyle = '#000'; ctx.font = 'bold 10px "Orbitron", "Courier New", monospace';
+        ctx.fillText(label + ' ' + sec + 's', hx + 4, ty - 3);
+        ty -= 21;
     };
-    if (shieldActive) badge('SHIELD',   'rgba(0,255,127,0.85)', Math.ceil(shieldTimer/60));
-    if (boostActive)  badge('BOOST',    'rgba(255,200,0,0.85)', Math.ceil(boostTimer/60));
-    if (yeti.frozen)  badge('YT FROZE', 'rgba(0,191,255,0.85)', Math.ceil(yeti.frozenTimer/60));
-    if (yeti.stunned) badge('YT STUN',  'rgba(255,215,0,0.85)', Math.ceil(yeti.stunnedTimer/60));
+    if (shieldActive) badge('SHIELD',   'rgba(0,255,127,0.8)', Math.ceil(shieldTimer/60));
+    if (boostActive)  badge('BOOST',    'rgba(255,200,0,0.8)', Math.ceil(boostTimer/60));
+    if (yeti.frozen)  badge('YT FROZE', 'rgba(0,191,255,0.8)', Math.ceil(yeti.frozenTimer/60));
+    if (yeti.stunned) badge('YT STUN',  'rgba(255,215,0,0.8)', Math.ceil(yeti.stunnedTimer/60));
 }
 
 function drawMobileButtons() {
-    // Jump button – bottom right
-    ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.beginPath(); ctx.arc(GAME_WIDTH - 40, GAME_HEIGHT - 40, 28, 0, Math.PI*2); ctx.fill();
-    ctx.strokeStyle = '#FFF'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.fillStyle = '#FFF'; ctx.font = 'bold 12px Courier New';
+    // Jump button – bottom right, icy styled
+    const x = GAME_WIDTH - 44;
+    const y = GAME_HEIGHT - 44;
+    const r = 32;
+
+    ctx.save();
+
+    // Outer glow
+    ctx.shadowColor = '#00AADD';
+    ctx.shadowBlur = 14;
+
+    // Button body
+    ctx.fillStyle = 'rgba(0,30,60,0.6)';
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+
+    // Border ring
+    ctx.strokeStyle = '#00CCFF'; ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+
+    // Inner ring accent
+    ctx.strokeStyle = 'rgba(0,180,255,0.25)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(x, y, r - 6, 0, Math.PI*2); ctx.stroke();
+
+    // Label
+    ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 12px "Orbitron", "Courier New", monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('JUMP', GAME_WIDTH - 40, GAME_HEIGHT - 40);
+    ctx.fillText('JUMP', x, y);
     ctx.textBaseline = 'alphabetic';
+
+    ctx.restore();
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
@@ -721,8 +831,11 @@ function drawMobileButtons() {
 function update() {
     if (gameState === 'crashed' || gameState === 'caught') return;
 
-    // Steering – follow touch/mouse X position
-    if (useMouseControl) {
+    // Steering – relative touch takes priority, then mouse, then keyboard
+    if (useRelativeTouch) {
+        // Drag delta of ~40 px = max angle of 2
+        skier.angle = Math.max(-2, Math.min(2, touchDeltaX / 40));
+    } else if (useMouseControl) {
         const diff = mouseX - skier.x;
         skier.angle = Math.abs(diff) > 30
             ? (diff > 0 ? Math.min(2, diff/50) : Math.max(-2, diff/50))
@@ -769,6 +882,20 @@ function update() {
     // Difficulty ramp: sparse start, full density by 1200 m
     difficulty = Math.min(1.0, 0.25 + (distance / 1200) * 0.75);
 
+    // ── High-score tombstone ──────────────────────────────────────────────────
+    if (!tombstonePlaced && highScore > 0 && distance >= highScore - 250) {
+        tombstoneObj = {
+            x: highScoreX,
+            y: GAME_HEIGHT + 60,
+            score: highScore
+        };
+        tombstonePlaced = true;
+    }
+    if (tombstoneObj) {
+        if (!freezeActive) tombstoneObj.y -= speed;
+        if (tombstoneObj.y < -80) tombstoneObj = null;
+    }
+
     // Move obstacles (frozen = paused)
     if (!freezeActive) {
         obstacles.forEach(obs => { obs.y -= speed; });
@@ -802,6 +929,7 @@ function update() {
                     if (jumpHeight === 0) { jumpVelocity = 12; gameState = 'jumping'; }
                 } else {
                     gameState = 'crashed'; speed = 0;
+                    checkAndSaveHighScore();
                 }
             }
         }
@@ -893,6 +1021,7 @@ function update() {
         // Catch the skier
         if (checkYetiCollision() && jumpHeight < 20 && !shieldActive) {
             gameState = 'caught';
+            checkAndSaveHighScore();
         }
     }
 
@@ -921,6 +1050,11 @@ function render() {
         if (p.y > -50 && p.y < GAME_HEIGHT + 50) drawPowerupPickup(p);
     });
 
+    // High-score tombstone
+    if (tombstoneObj && tombstoneObj.y > -50 && tombstoneObj.y < GAME_HEIGHT + 50) {
+        drawTombstone(tombstoneObj.x, tombstoneObj.y, tombstoneObj.score);
+    }
+
     // Projectiles
     drawProjectiles();
 
@@ -942,9 +1076,9 @@ function render() {
         const pulse = 0.4 + 0.4 * Math.sin(Date.now() / 200);
         ctx.fillStyle = `rgba(139,0,0,${pulse})`;
         ctx.fillRect(GAME_WIDTH/2 - 100, 5, 200, 26);
-        ctx.fillStyle = '#FFF'; ctx.font = 'bold 13px Courier New';
+        ctx.fillStyle = '#FFF'; ctx.font = 'bold 12px "Orbitron", "Courier New", monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('YETI IS COMING BACK...', GAME_WIDTH/2, 23);
+        ctx.fillText('YETI INCOMING...', GAME_WIDTH/2, 23);
     }
 
     // Score bar
@@ -960,17 +1094,36 @@ function render() {
         status = ` | Yeti at ${Math.floor(mLeft)}m`;
     }
     scoreDisplay.textContent =
-        `Distance: ${Math.floor(distance)}m | Speed: ${speed.toFixed(1)}${status}`;
+        `Distance: ${Math.floor(distance)}m | Best: ${Math.floor(highScore)}m | Speed: ${speed.toFixed(1)}${status}`;
 
     // Game-over overlays
     if (gameState === 'crashed' || gameState === 'caught') {
-        ctx.fillStyle = gameState === 'caught' ? 'rgba(139,0,0,0.7)' : 'rgba(0,0,0,0.5)';
+        ctx.fillStyle = gameState === 'caught' ? 'rgba(100,0,0,0.75)' : 'rgba(0,0,0,0.6)';
         ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-        ctx.fillStyle = '#FFF'; ctx.font = 'bold 48px Courier New'; ctx.textAlign = 'center';
-        ctx.fillText(gameState === 'caught' ? 'EATEN BY YETI!' : 'CRASHED!', GAME_WIDTH/2, GAME_HEIGHT/2 - 20);
-        ctx.font = '24px Courier New';
-        ctx.fillText(`Distance: ${Math.floor(distance)}m`, GAME_WIDTH/2, GAME_HEIGHT/2 + 20);
-        ctx.fillText('Tap / SPACE to restart', GAME_WIDTH/2, GAME_HEIGHT/2 + 60);
+
+        // Title
+        ctx.fillStyle = '#FFF'; ctx.font = 'bold 36px "Orbitron", "Courier New", monospace'; ctx.textAlign = 'center';
+        ctx.fillText(gameState === 'caught' ? 'EATEN BY YETI!' : 'CRASHED!', GAME_WIDTH/2, GAME_HEIGHT/2 - 40);
+
+        // Distance
+        ctx.font = '20px "Orbitron", "Courier New", monospace';
+        ctx.fillText(`Distance: ${Math.floor(distance)}m`, GAME_WIDTH/2, GAME_HEIGHT/2 + 5);
+
+        // High score
+        if (distance >= highScore && highScore > 0) {
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 18px "Orbitron", "Courier New", monospace';
+            ctx.fillText('NEW HIGH SCORE!', GAME_WIDTH/2, GAME_HEIGHT/2 + 35);
+        } else if (highScore > 0) {
+            ctx.fillStyle = '#66CCEE';
+            ctx.font = '16px "Orbitron", "Courier New", monospace';
+            ctx.fillText(`Best: ${Math.floor(highScore)}m`, GAME_WIDTH/2, GAME_HEIGHT/2 + 35);
+        }
+
+        // Restart prompt
+        ctx.fillStyle = '#AAA';
+        ctx.font = '16px "Orbitron", "Courier New", monospace';
+        ctx.fillText('Tap / SPACE to restart', GAME_WIDTH/2, GAME_HEIGHT/2 + 70);
     }
 }
 
@@ -988,6 +1141,11 @@ function resetGame() {
     boostActive = shieldActive = freezeActive = false;
     boostTimer = shieldTimer = freezeTimer = 0;
     powerupProjectiles = []; powerupPickups = [];
+    tombstonePlaced = false;
+    tombstoneObj = null;
+    // Re-read high score in case it was updated
+    highScore = parseInt(localStorage.getItem('frostbyte_highscore') || '0', 10);
+    highScoreX = parseInt(localStorage.getItem('frostbyte_highscore_x') || String(GAME_WIDTH / 2), 10);
     initObstacles();
 }
 
@@ -1003,6 +1161,7 @@ function gameLoop() {
 
 document.addEventListener('keydown', e => {
     useMouseControl = false;
+    useRelativeTouch = false;
     switch (e.key.toLowerCase()) {
         case 'arrowleft': case 'a':  keys.left  = true; break;
         case 'arrowright': case 'd': keys.right = true; break;
@@ -1034,6 +1193,7 @@ canvas.addEventListener('mousemove', e => {
     const rect = canvas.getBoundingClientRect();
     mouseX = (e.clientX - rect.left) / scale;
     useMouseControl = true;
+    useRelativeTouch = false;
 });
 canvas.addEventListener('click', () => {
     if (gameState === 'crashed' || gameState === 'caught') { resetGame(); return; }
@@ -1041,7 +1201,7 @@ canvas.addEventListener('click', () => {
 });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-// ─── Touch input ──────────────────────────────────────────────────────────────
+// ─── Touch input (relative steering) ─────────────────────────────────────────
 
 function getTouchPos(touch) {
     const rect = canvas.getBoundingClientRect();
@@ -1058,21 +1218,23 @@ canvas.addEventListener('touchstart', e => {
 
     if (gameState === 'crashed' || gameState === 'caught') { resetGame(); return; }
 
-    // Tap JUMP button area (bottom-right circle ~28px radius)
-    if (Math.abs(pos.x - (GAME_WIDTH - 40)) < 40 && Math.abs(pos.y - (GAME_HEIGHT - 40)) < 40) {
+    // Tap JUMP button area (bottom-right circle)
+    if (Math.abs(pos.x - (GAME_WIDTH - 44)) < 44 && Math.abs(pos.y - (GAME_HEIGHT - 44)) < 44) {
         if (jumpHeight === 0) { jumpVelocity = 12; gameState = 'jumping'; }
         return;
     }
 
     // Tap power-up HUD area (bottom-left box)
-    if (pos.x < 145 && pos.y > GAME_HEIGHT - 58) {
+    if (pos.x < 155 && pos.y > GAME_HEIGHT - 60) {
         usePowerup(); return;
     }
 
-    activeTouchId  = touch.identifier;
-    touchCurrentX  = pos.x;
-    useMouseControl = true;
-    mouseX = pos.x;
+    // Begin relative drag steering – record the starting X
+    activeTouchId   = touch.identifier;
+    touchStartX     = pos.x;
+    touchDeltaX     = 0;
+    useRelativeTouch = true;
+    useMouseControl  = false;
 }, { passive: false });
 
 canvas.addEventListener('touchmove', e => {
@@ -1080,8 +1242,7 @@ canvas.addEventListener('touchmove', e => {
     for (const touch of e.changedTouches) {
         if (touch.identifier === activeTouchId) {
             const pos = getTouchPos(touch);
-            touchCurrentX = pos.x;
-            mouseX = pos.x;
+            touchDeltaX = pos.x - touchStartX;
         }
     }
 }, { passive: false });
@@ -1090,7 +1251,10 @@ canvas.addEventListener('touchend', e => {
     e.preventDefault();
     for (const touch of e.changedTouches) {
         if (touch.identifier === activeTouchId) {
-            activeTouchId = null; touchCurrentX = null;
+            activeTouchId    = null;
+            touchStartX      = null;
+            touchDeltaX      = 0;
+            useRelativeTouch = false;
         }
     }
 }, { passive: false });
