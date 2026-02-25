@@ -149,7 +149,7 @@ function spawnObstacle(y) {
         width:  type === 'tree' ? 30 : type === 'rock' ? 25 : 40,
         height: type === 'tree' ? 40 : type === 'rock' ? 20 : 10,
         destroyed: false,
-        snowy: type === 'tree' ? Math.random() < 0.4 : false  // 40% of trees get heavy snow
+        snowy: type === 'tree' ? Math.random() < 0.55 : false  // 55% of trees get heavy snow (matching reference)
     });
 }
 
@@ -170,55 +170,62 @@ function drawTree(x, y, snowy) {
     const b = (dx, dy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(x+dx, y+dy, w, h); };
 
     // ── Trunk ──────────────────────────────────────────────────────
-    b(-3, 8,  6, 14, '#8B5E3C');   // warm brown bark
-    b(-2, 8,  2, 14, '#A07850');   // left highlight
-    b( 2, 9,  2, 12, '#6B4226');   // right shadow
+    b(-3, 8,  6, 14, '#5C3D20');   // dark brown bark
+    b(-2, 8,  2, 14, '#7A5234');   // left highlight
+    b( 2, 9,  2, 12, '#3E2810');   // right shadow
 
-    // ── Base foliage tier (widest) ─────────────────────────────────
-    b(-15, -3, 30, 12, '#2E8B3E');  // bright green base
-    b(-13, -3,  9,  7, '#3CB050');  // left highlight
-    b( -1, -3,  9,  7, '#3CB050');  // right highlight
-    b(  9, -1,  6,  9, '#1D6B2E');  // right shadow
-    b(-13, -3,  3,  3, '#4CD068');  // top-left bright spot
+    // ── Base foliage tier (widest) – dark forest green ──────────────
+    b(-15, -3, 30, 12, '#1A4A2E');  // dark forest green base
+    b(-13, -3,  9,  7, '#245838');  // left highlight
+    b( -1, -3,  9,  7, '#245838');  // right highlight
+    b(  9, -1,  6,  9, '#103820');  // right shadow
+    b(-13, -3,  3,  3, '#2D6840');  // top-left accent
 
     // ── Middle tier ────────────────────────────────────────────────
-    b(-11,-14, 22, 12, '#2D9040');
-    b( -9,-14,  7,  7, '#3CB050');
-    b(  1,-14,  7,  7, '#3CB050');
-    b(  7,-12,  4,  9, '#1E7030');
-    b( -9,-14,  3,  3, '#4CD068');
+    b(-11,-14, 22, 12, '#1C5030');
+    b( -9,-14,  7,  7, '#265C3A');
+    b(  1,-14,  7,  7, '#265C3A');
+    b(  7,-12,  4,  9, '#124024');
+    b( -9,-14,  3,  3, '#2D6840');
 
     // ── Upper tier ─────────────────────────────────────────────────
-    b( -8,-24, 16, 11, '#30A048');
-    b( -6,-24,  5,  6, '#42C05A');
-    b(  1,-24,  5,  6, '#42C05A');
-    b(  5,-22,  3,  8, '#1E7030');
+    b( -8,-24, 16, 11, '#1E5432');
+    b( -6,-24,  5,  6, '#28663E');
+    b(  1,-24,  5,  6, '#28663E');
+    b(  5,-22,  3,  8, '#124024');
 
     // ── Tip ────────────────────────────────────────────────────────
-    b( -5,-34, 10, 11, '#35AA50');
-    b( -3,-34,  4,  7, '#4CD068');
-    b(  2,-32,  2,  7, '#208038');
+    b( -5,-34, 10, 11, '#205836');
+    b( -3,-34,  4,  7, '#2D6840');
+    b(  2,-32,  2,  7, '#14442A');
 
     if (snowy) {
-        // Heavy snow coverage – thick shelves on each tier
-        b(-13, -4, 26,  3, '#F0F4FF');  // base snow shelf
-        b(-15, -5, 10,  2, '#FFFFFF');
-        b(  3, -5, 10,  2, '#FFFFFF');
-        b( -9,-15, 18,  3, '#F0F4FF');  // middle snow shelf
-        b(-11,-16,  8,  2, '#FFFFFF');
-        b(  3,-16,  8,  2, '#FFFFFF');
-        b( -6,-25, 12,  3, '#F0F4FF');  // upper snow shelf
-        b( -8,-26,  6,  2, '#FFFFFF');
-        b(  2,-26,  6,  2, '#FFFFFF');
-        b( -4,-35,  8,  2, '#FFFFFF');  // tip snow
-        b( -3,-37,  6,  2, '#F0F4FF');
-        b( -2,-39,  4,  2, '#FFFFFF');
-        b( -1,-41,  2,  2, '#FFFFFF');  // snow peak
+        // Heavy snow coverage – thick white shelves on each tier
+        b(-15, -4, 30,  4, '#E8EEF4');  // base snow shelf – wide
+        b(-15, -5, 12,  2, '#FFFFFF');
+        b(  3, -5, 12,  2, '#FFFFFF');
+        b(-11,-15, 22,  4, '#E8EEF4');  // middle snow shelf
+        b(-11,-16, 10,  2, '#FFFFFF');
+        b(  3,-16, 10,  2, '#FFFFFF');
+        b( -8,-25, 16,  4, '#E8EEF4');  // upper snow shelf
+        b( -8,-26,  7,  2, '#FFFFFF');
+        b(  2,-26,  7,  2, '#FFFFFF');
+        b( -5,-35, 10,  3, '#FFFFFF');   // tip snow
+        b( -4,-37,  8,  2, '#F0F4FF');
+        b( -3,-39,  6,  2, '#FFFFFF');
+        b( -2,-41,  4,  2, '#FFFFFF');
+        b( -1,-43,  2,  2, '#FFFFFF');   // snow peak
     } else {
-        // Light snow on tips only
-        b( -3,-34,  3,  2, '#F0F0F0');
-        b( -2,-36,  4,  2, '#FFFFFF');
-        b( -1,-38,  2,  2, '#FFFFFF');  // peak
+        // Light snow on tips and edges
+        b( -4,-34,  4,  2, '#E8EEF4');
+        b( -3,-36,  6,  2, '#FFFFFF');
+        b( -2,-38,  4,  2, '#FFFFFF');
+        b( -1,-40,  2,  2, '#FFFFFF');   // peak
+        // Light dusting on branch tips
+        b(-14, -3,  4,  2, '#DDE4EC');
+        b( 10, -3,  4,  2, '#DDE4EC');
+        b(-10,-14,  3,  2, '#DDE4EC');
+        b(  7,-14,  3,  2, '#DDE4EC');
     }
 }
 
@@ -226,33 +233,34 @@ function drawRock(x, y) {
     const b = (dx, dy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(x+dx, y+dy, w, h); };
 
     // Ground shadow
-    b(-12, 8, 26, 4, 'rgba(0,0,0,0.14)');
+    b(-12, 8, 26, 4, 'rgba(0,0,0,0.16)');
 
     // Dark outline
-    b(-12, -2, 26, 14, '#505050');
+    b(-12, -2, 26, 14, '#4A4038');
 
-    // Main body – brighter
-    b(-10, -6, 22, 16, '#7E7E7E');
-    b(-14, -2, 6,  10, '#767676');   // left bulge
-    b( 10, -2, 6,  10, '#767676');   // right bulge
+    // Main body – warm brown/grey like mountain rocks
+    b(-10, -6, 22, 16, '#6E6458');
+    b(-14, -2, 6,  10, '#665C50');   // left bulge
+    b( 10, -2, 6,  10, '#665C50');   // right bulge
 
-    // Mid highlight
-    b( -8, -6, 10,  8, '#949494');
-    b( -4, -8,  8,  4, '#A4A4A4');   // top face
+    // Mid highlight – warm stone
+    b( -8, -6, 10,  8, '#847868');
+    b( -4, -8,  8,  4, '#948878');   // top face
 
     // Bright highlight
-    b( -8, -8,  6,  4, '#B8B8B8');
-    b( -6, -9,  4,  2, '#CCCCCC');
+    b( -8, -8,  6,  4, '#A89888');
+    b( -6, -9,  4,  2, '#B8A898');
 
-    // Shadow side
-    b(  6,  2, 10, 10, '#5E5E5E');
-    b( 10, -2,  4, 14, '#4E4E4E');
+    // Shadow side – cooler
+    b(  6,  2, 10, 10, '#504840');
+    b( 10, -2,  4, 14, '#3E3830');
 
-    // Snow on top
-    b( -9, -9, 12,  3, '#F6F6F6');
-    b(-11, -7,  4,  2, '#FFFFFF');
-    b(  2, -8,  5,  2, '#F0F0F0');
-    b( -7,-11,  6,  2, '#FFFFFF');
+    // Snow on top – heavier
+    b(-10, -9, 14,  4, '#EEF2F8');
+    b(-12, -7,  5,  2, '#FFFFFF');
+    b(  2, -8,  6,  2, '#F4F8FF');
+    b( -8,-12,  8,  3, '#FFFFFF');
+    b( -6,-14,  4,  2, '#F4F8FF');
 }
 
 function drawJump(x, y) {
@@ -261,27 +269,27 @@ function drawJump(x, y) {
     // Shadow on snow
     b(-22, 6, 44, 5, 'rgba(0,0,0,0.10)');
 
-    // Ramp surface – bright warm tones
-    b(-10, -8,  22, 3, '#DCCAA8');
-    b(-13, -5,  28, 3, '#E8D6B4');
-    b(-16, -2,  34, 3, '#F0DDBB');
-    b(-20,  1,  40, 4, '#F8E8CC');   // bottom/widest
+    // Ramp surface – cool snow/ice tones
+    b(-10, -8,  22, 3, '#C8D4E0');
+    b(-13, -5,  28, 3, '#D4DEE8');
+    b(-16, -2,  34, 3, '#DEE6EE');
+    b(-20,  1,  40, 4, '#E8EEF4');   // bottom/widest
 
-    // Left edge
-    b(-20,  1,   4, 4, '#BCA478');
-    b(-16, -2,   4, 3, '#C4AC80');
-    b(-13, -5,   3, 3, '#CEB488');
-    b(-10, -8,   2, 3, '#D4B890');
+    // Left edge – blue-grey shadow
+    b(-20,  1,   4, 4, '#8A9AAC');
+    b(-16, -2,   4, 3, '#94A4B4');
+    b(-13, -5,   3, 3, '#9EAEC0');
+    b(-10, -8,   2, 3, '#A8B4C4');
 
     // Top highlight stripe
-    b( -8, -8,  18, 2, '#FFF4E0');
+    b( -8, -8,  18, 2, '#F0F4FA');
 
     // Right shading
-    b( 16, -5,   4, 6, '#D4C098');
+    b( 16, -5,   4, 6, '#B0BCC8');
 
     // Arrow markers on ramp surface
-    b( -2, -6,   4, 2, '#C09868');
-    b( -3, -3,   6, 2, '#C09868');
+    b( -2, -6,   4, 2, '#8898A8');
+    b( -3, -3,   6, 2, '#8898A8');
 }
 
 function drawTombstone(x, y, score) {
@@ -290,39 +298,39 @@ function drawTombstone(x, y, score) {
     // Ground shadow
     b(-16, 6, 32, 5, 'rgba(0,0,0,0.18)');
 
-    // Ground mound
-    b(-18, 2, 36, 8, '#909080');
-    b(-16, 0, 32, 4, '#A0A090');
+    // Ground mound – cool grey
+    b(-18, 2, 36, 8, '#808890');
+    b(-16, 0, 32, 4, '#909AA0');
 
-    // Tombstone body
-    b(-11, -24, 22, 28, '#787878');
-    b(-9, -28, 18, 6, '#828282');
-    b(-7, -30, 14, 4, '#8A8A8A');
-    b(-5, -32, 10, 4, '#929292');
+    // Tombstone body – blue-grey stone
+    b(-11, -24, 22, 28, '#687078');
+    b(-9, -28, 18, 6, '#727A82');
+    b(-7, -30, 14, 4, '#7C848C');
+    b(-5, -32, 10, 4, '#868E96');
 
     // Left highlight
-    b(-11, -24, 4, 24, '#909090');
-    b(-7, -30, 4, 8, '#989898');
+    b(-11, -24, 4, 24, '#808890');
+    b(-7, -30, 4, 8, '#8A9298');
 
     // Right shadow
-    b(5, -24, 6, 26, '#606060');
-    b(7, -28, 4, 6, '#585858');
+    b(5, -24, 6, 26, '#505860');
+    b(7, -28, 4, 6, '#485058');
 
     // Snow on top
-    b(-6, -32, 12, 2, '#F4F4F4');
-    b(-8, -30, 16, 2, '#EAEAEA');
+    b(-6, -32, 12, 2, '#F0F4FA');
+    b(-8, -30, 16, 2, '#E4E8EE');
 
     // Cross
-    b(-1, -26, 2, 16, '#444');
-    b(-5, -22, 10, 2, '#444');
+    b(-1, -26, 2, 16, '#384048');
+    b(-5, -22, 10, 2, '#384048');
 
     // Small flowers at base
-    b(-14, -1, 3, 3, '#DD6688');
-    b(-10, 0, 3, 3, '#EEBB44');
-    b(8, -1, 3, 3, '#DD6688');
+    b(-14, -1, 3, 3, '#CC5878');
+    b(-10, 0, 3, 3, '#D4AA44');
+    b(8, -1, 3, 3, '#CC5878');
 
     // Text
-    ctx.fillStyle = '#333';
+    ctx.fillStyle = '#2A3038';
     ctx.font = 'bold 7px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -399,16 +407,14 @@ function drawSkier() {
     // ── Crashed state ─────────────────────────────────────────────────────────
     if (gameState === 'crashed') {
         const b = (dx, dy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(dx, dy, w, h); };
-        const jCol = isSB ? '#1B8B6B' : '#1B52C0';
+        const jCol = isSB ? '#2878C8' : '#2878C8';
         b(-16, -6, 32,  8, jCol);        // jacket flat
-        b( -6, -8, 12,  6, '#FFCC88');   // face sideways
-        b( -4,-10,  8,  4, '#CC0000');   // hat above head
-        b( -3,-12,  6,  2, '#FFFFFF');   // pom pom
+        b( -6, -8, 12,  6, '#F0B880');   // face sideways
+        b( -4,-10,  8,  4, '#606878');   // helmet piece
+        b( -3,-12,  6,  2, '#808890');   // helmet top
         if (isSB) {
-            // Scattered snowboard
-            ctx.save(); ctx.rotate(0.3); b(-15, 14, 30, 3, '#2E60CC'); ctx.restore();
+            ctx.save(); ctx.rotate(0.3); b(-15, 14, 30, 3, '#3A3A44'); ctx.restore();
         } else {
-            // Scattered skis
             ctx.save(); ctx.rotate( 0.45); b(-18, 12, 26, 3, '#CC1100'); ctx.restore();
             ctx.save(); ctx.rotate(-0.35); b(  4, 14, 26, 3, '#CC1100'); ctx.restore();
         }
@@ -427,38 +433,38 @@ function drawSkier() {
     if (!isSB) {
         const drawPole = (startX, startY, stepX, stepY, steps) => {
             for (let i = 0; i < steps; i++) {
-                b(startX + i*stepX, startY + i*stepY, 2, 2, '#A89830');
+                b(startX + i*stepX, startY + i*stepY, 2, 2, '#808890');
             }
         };
-        if (ang <= 0.8)  { drawPole(-10, -8, -2, 2, 9); b(-28, 9, 6, 2, '#C0C070'); }
-        if (ang >= -0.8) { drawPole(  8, -8,  2, 2, 9); b( 22, 9, 6, 2, '#C0C070'); }
+        if (ang <= 0.8)  { drawPole(-10, -8, -2, 2, 9); b(-28, 9, 6, 2, '#A0A8B4'); }
+        if (ang >= -0.8) { drawPole(  8, -8,  2, 2, 9); b( 22, 9, 6, 2, '#A0A8B4'); }
     }
 
     // ── FOOTWEAR ──────────────────────────────────────────────────────────────
     if (isSB) {
-        // Snowboard
+        // Snowboard – dark grey/charcoal like reference
         if (!hardTurn) {
-            b(-14, 16, 28, 3, '#2E60CC');   // board main
-            b(-14, 16, 28, 1, '#4080EE');   // top edge highlight
-            b(-14, 18, 28, 1, '#1A3888');   // bottom edge
-            b(-16, 16,  3, 3, '#4080EE');   // nose
-            b( 13, 16,  3, 3, '#4080EE');   // tail
-            b( -5, 14,  4, 3, '#333');      // front binding
-            b(  3, 14,  4, 3, '#333');      // rear binding
+            b(-14, 16, 28, 3, '#3A3A44');   // board main dark
+            b(-14, 16, 28, 1, '#505860');   // top edge highlight
+            b(-14, 18, 28, 1, '#2A2A30');   // bottom edge shadow
+            b(-16, 16,  3, 3, '#505860');   // nose
+            b( 13, 16,  3, 3, '#505860');   // tail
+            b( -5, 14,  4, 3, '#222');      // front binding
+            b(  3, 14,  4, 3, '#222');      // rear binding
         } else {
             const dir = ang > 0 ? 1 : -1;
-            b(-12 * dir - 3, 15, 28, 2, '#2E60CC');
-            b(-12 * dir - 3, 14,  4, 3, '#4080EE');
+            b(-12 * dir - 3, 15, 28, 2, '#3A3A44');
+            b(-12 * dir - 3, 14,  4, 3, '#505860');
         }
     } else {
-        // Skis
+        // Skis – red
         if (!hardTurn) {
-            b(-12, 13, 2, 4, '#EE4422');   // left tip
-            b(-10, 15, 8, 2, '#DD2200');   // left ski
-            b(  2, 15, 8, 2, '#DD2200');   // right ski
-            b( 10, 13, 2, 4, '#EE4422');   // right tip
-            b( -9, 15, 2, 2, '#FF5533');   // binding L
-            b(  3, 15, 2, 2, '#FF5533');   // binding R
+            b(-12, 13, 2, 4, '#EE4422');
+            b(-10, 15, 8, 2, '#DD2200');
+            b(  2, 15, 8, 2, '#DD2200');
+            b( 10, 13, 2, 4, '#EE4422');
+            b( -9, 15, 2, 2, '#FF5533');
+            b(  3, 15, 2, 2, '#FF5533');
         } else {
             const dir = ang > 0 ? 1 : -1;
             b(-10 * dir - 5, 14, 24, 2, '#DD2200');
@@ -468,90 +474,97 @@ function drawSkier() {
 
     // ── BOOTS ────────────────────────────────────────────────────────────────
     if (isSB) {
-        b(-5, 10, 4, 6, '#2A2A3A');   // left boot (bulkier)
-        b( 2, 10, 4, 6, '#2A2A3A');   // right boot
-        b(-4, 10, 2, 3, '#3A3A50');
-        b( 3, 10, 2, 3, '#3A3A50');
+        b(-5, 10, 4, 6, '#2A2A30');   // left boot
+        b( 2, 10, 4, 6, '#2A2A30');   // right boot
+        b(-4, 10, 2, 3, '#3A3A44');
+        b( 3, 10, 2, 3, '#3A3A44');
     } else {
-        b(-7, 9, 5, 6, '#222238');
-        b( 2, 9, 5, 6, '#222238');
-        b(-6, 9, 2, 3, '#333350');
-        b( 3, 9, 2, 3, '#333350');
+        b(-7, 9, 5, 6, '#2A2A30');
+        b( 2, 9, 5, 6, '#2A2A30');
+        b(-6, 9, 2, 3, '#3A3A44');
+        b( 3, 9, 2, 3, '#3A3A44');
     }
 
     // ── PANTS / LEGS ─────────────────────────────────────────────────────────
-    b(-6,  1, 4, 9, '#1040A0');
-    b( 2,  1, 4, 9, '#1040A0');
-    b(-5,  1, 2, 5, '#1858C0');   // highlight L
-    b( 3,  1, 2, 5, '#1858C0');   // highlight R
-    b(-6,  8, 4, 2, '#0A3080');   // cuff shadow
-    b( 2,  8, 4, 2, '#0A3080');
+    const pMain = isSB ? '#1858C0' : '#1858C0';
+    const pHi   = isSB ? '#2870D8' : '#2870D8';
+    const pSh   = isSB ? '#0E3A88' : '#0E3A88';
+    b(-6,  1, 4, 9, pMain);
+    b( 2,  1, 4, 9, pMain);
+    b(-5,  1, 2, 5, pHi);    // highlight L
+    b( 3,  1, 2, 5, pHi);    // highlight R
+    b(-6,  8, 4, 2, pSh);    // cuff shadow
+    b( 2,  8, 4, 2, pSh);
 
     // ── JACKET ───────────────────────────────────────────────────────────────
     let jMain, jHi, jSh;
     if (boostActive) {
         jMain = '#D06000'; jHi = '#F08820'; jSh = '#904000';
     } else if (isSB) {
-        jMain = '#1B8B6B'; jHi = '#28A880'; jSh = '#126048';
+        jMain = '#2878C8'; jHi = '#3C90E0'; jSh = '#1858A0';
     } else {
-        jMain = '#2060D0'; jHi = '#3878F0'; jSh = '#1440A0';
+        jMain = '#2878C8'; jHi = '#3C90E0'; jSh = '#1858A0';
     }
     b( -7,-14, 14, 16, jMain);   // main torso
     b( -7,-14,  2, 16, jSh);     // left shadow
     b(  5,-14,  2, 16, jSh);     // right shadow
     b( -5,-14, 10,  2, jHi);     // shoulder highlight
     b( -3, -6,  6,  2, jSh);     // chest pocket line
+    b( -1, -4,  2,  2, '#FFD700'); // small zipper pull detail
 
     // Sleeves
     if (isSB) {
-        // Snowboarder arms – wider, no poles
-        b(-14, -10,  8,  6, jMain);  // left sleeve
-        b(  6, -10,  8,  6, jMain);  // right sleeve
+        b(-14, -10,  8,  6, jMain);
+        b(  6, -10,  8,  6, jMain);
         b(-14, -10,  2,  6, jSh);
         b( 12, -10,  2,  6, jSh);
-        // Gloves
-        b(-14, -6,  4,  4, '#E8D8B0');
-        b( 10, -6,  4,  4, '#E8D8B0');
+        // Dark gloves (matching reference)
+        b(-16, -6,  6,  5, '#2A2A30');
+        b(-15, -6,  2,  2, '#3A3A44');
+        b( 10, -6,  6,  5, '#2A2A30');
+        b( 11, -6,  2,  2, '#3A3A44');
     } else {
-        // Skier arms – toward poles
         b(-12, -9,  6,  6, jMain);
         b(  6, -9,  6,  6, jMain);
         b(-12, -9,  2,  6, jSh);
         b( 10, -9,  2,  6, jSh);
-        // Gloves
-        b(-12, -5,  4,  4, '#E8D8B0');
-        b(  8, -5,  4,  4, '#E8D8B0');
+        // Dark gloves (matching reference)
+        b(-14, -5,  6,  5, '#2A2A30');
+        b(-13, -5,  2,  2, '#3A3A44');
+        b(  8, -5,  6,  5, '#2A2A30');
+        b(  9, -5,  2,  2, '#3A3A44');
     }
 
     // ── NECK ─────────────────────────────────────────────────────────────────
-    b( -2,-16,  4,  4, '#FFCC88');
+    b( -2,-16,  4,  4, '#F0B880');
 
     // ── HEAD / FACE ──────────────────────────────────────────────────────────
-    b( -5,-24, 10,  9, '#FFCC88');  // face
-    b( -5,-24,  2,  9, '#EAB070');  // left shadow
-    b(  3,-24,  2,  9, '#EAB070');  // right shadow
-    b( -5,-16, 10,  1, '#CC8848');  // chin shadow
+    b( -5,-24, 10,  9, '#F0B880');  // face – warm peach
+    b( -5,-24,  2,  9, '#D8A068');  // left shadow
+    b(  3,-24,  2,  9, '#D8A068');  // right shadow
+    b( -5,-16, 10,  1, '#C08848');  // chin shadow
 
-    // ── GOGGLES ──────────────────────────────────────────────────────────────
-    b( -5,-23, 10,  1, '#222');     // strap top
-    b( -5,-19,  1,  4, '#222');     // frame left
-    b(  4,-19,  1,  4, '#222');     // frame right
-    b( -4,-22,  3,  4, '#E0B800');  // left lens
-    b(  1,-22,  3,  4, '#E0B800');  // right lens
+    // ── GOGGLES (blue/purple tinted – matching reference) ────────────────────
+    b( -6,-23, 12,  1, '#333');     // strap top
+    b( -6,-19,  1,  4, '#333');     // frame left
+    b(  5,-19,  1,  4, '#333');     // frame right
+    b( -5,-22,  4,  4, '#4488CC');  // left lens – blue tint
+    b(  1,-22,  4,  4, '#4488CC');  // right lens – blue tint
     b( -1,-22,  2,  3, '#333');     // nose bridge
-    b( -3,-22,  1,  1, '#FFE860');  // left glint
-    b(  2,-22,  1,  1, '#FFE860');  // right glint
-    b( -5,-19, 10,  1, '#222');     // strap bottom
+    b( -4,-21,  1,  1, '#88CCFF');  // left glint
+    b(  3,-21,  1,  1, '#88CCFF');  // right glint
+    b( -6,-19, 12,  1, '#333');     // strap bottom
 
-    // ── HAT (knit cap) ───────────────────────────────────────────────────────
-    b( -5,-26, 10,  3, '#BB0000');  // brim band
-    b( -4,-32,  8,  6, '#DD1010');  // hat body
-    b( -3,-32,  4,  6, '#EE2222');  // highlight stripe
-    b( -4,-28,  8,  2, '#FF7777');  // pattern stripe
-    // Pom pom
-    b( -3,-35,  6,  3, '#F8F8F8');
-    b( -2,-37,  4,  2, '#E8E8E8');
-    b( -1,-38,  2,  1, '#FFFFFF');
+    // ── HELMET (grey, rounded – matching reference) ──────────────────────────
+    b( -6,-26, 12,  4, '#606878');  // helmet base/brim
+    b( -5,-32, 10,  7, '#707880');  // helmet body
+    b( -4,-33,  8,  2, '#808890');  // helmet top
+    b( -3,-34,  6,  2, '#909AA0');  // helmet crown
+    b( -4,-32,  3,  5, '#808890');  // left highlight
+    b(  3,-30,  2,  4, '#585E68');  // right shadow
+    // Ear pads
+    b( -7,-28,  2,  6, '#585E68');
+    b(  5,-28,  2,  6, '#585E68');
 
     ctx.restore();
 }
@@ -714,8 +727,10 @@ function initSnow() {
     }
 }
 function drawSnow() {
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    snowParticles.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); });
+    snowParticles.forEach(p => {
+        ctx.fillStyle = p.size > 2 ? 'rgba(255,255,255,0.85)' : 'rgba(220,230,245,0.7)';
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+    });
 }
 function updateSnow() {
     snowParticles.forEach(p => {
@@ -819,8 +834,41 @@ function drawCharSelect() {
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
     // Subtle snow ground
-    ctx.fillStyle = '#141E38';
+    ctx.fillStyle = '#121C30';
     ctx.fillRect(0, GAME_HEIGHT * 0.72, GAME_WIDTH, GAME_HEIGHT * 0.28);
+
+    // Mountain silhouettes in background
+    ctx.fillStyle = '#1A2844';
+    ctx.beginPath();
+    ctx.moveTo(0, GAME_HEIGHT * 0.55);
+    ctx.lineTo(80, GAME_HEIGHT * 0.35);
+    ctx.lineTo(160, GAME_HEIGHT * 0.45);
+    ctx.lineTo(260, GAME_HEIGHT * 0.28);
+    ctx.lineTo(340, GAME_HEIGHT * 0.42);
+    ctx.lineTo(440, GAME_HEIGHT * 0.30);
+    ctx.lineTo(540, GAME_HEIGHT * 0.38);
+    ctx.lineTo(GAME_WIDTH, GAME_HEIGHT * 0.48);
+    ctx.lineTo(GAME_WIDTH, GAME_HEIGHT * 0.72);
+    ctx.lineTo(0, GAME_HEIGHT * 0.72);
+    ctx.closePath();
+    ctx.fill();
+
+    // Snow caps on mountains
+    ctx.fillStyle = '#2A3858';
+    ctx.beginPath();
+    ctx.moveTo(245, GAME_HEIGHT * 0.28);
+    ctx.lineTo(260, GAME_HEIGHT * 0.28);
+    ctx.lineTo(275, GAME_HEIGHT * 0.32);
+    ctx.lineTo(245, GAME_HEIGHT * 0.32);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(425, GAME_HEIGHT * 0.30);
+    ctx.lineTo(440, GAME_HEIGHT * 0.30);
+    ctx.lineTo(455, GAME_HEIGHT * 0.34);
+    ctx.lineTo(425, GAME_HEIGHT * 0.34);
+    ctx.closePath();
+    ctx.fill();
 
     // Animated snow
     drawSnow();
@@ -904,19 +952,19 @@ function drawCharPreview(type) {
 
     // Equipment
     if (isSB) {
-        // Snowboard
-        b(-14, 16, 28, 3, '#2E60CC');
-        b(-14, 16, 28, 1, '#4080EE');
-        b(-16, 16,  3, 3, '#4080EE');
-        b( 13, 16,  3, 3, '#4080EE');
-        b( -5, 14,  4, 3, '#333');
-        b(  3, 14,  4, 3, '#333');
+        // Snowboard – dark charcoal
+        b(-14, 16, 28, 3, '#3A3A44');
+        b(-14, 16, 28, 1, '#505860');
+        b(-16, 16,  3, 3, '#505860');
+        b( 13, 16,  3, 3, '#505860');
+        b( -5, 14,  4, 3, '#222');
+        b(  3, 14,  4, 3, '#222');
     } else {
-        // Poles
-        for (let i = 0; i < 9; i++) { b(-10 + i*-2, -8 + i*2, 2, 2, '#A89830'); }
-        b(-28, 9, 6, 2, '#C0C070');
-        for (let i = 0; i < 9; i++) { b(8 + i*2, -8 + i*2, 2, 2, '#A89830'); }
-        b( 22, 9, 6, 2, '#C0C070');
+        // Poles – silver/grey
+        for (let i = 0; i < 9; i++) { b(-10 + i*-2, -8 + i*2, 2, 2, '#808890'); }
+        b(-28, 9, 6, 2, '#A0A8B4');
+        for (let i = 0; i < 9; i++) { b(8 + i*2, -8 + i*2, 2, 2, '#808890'); }
+        b( 22, 9, 6, 2, '#A0A8B4');
         // Skis
         b(-12, 13, 2, 4, '#EE4422');
         b(-10, 15, 8, 2, '#DD2200');
@@ -924,54 +972,57 @@ function drawCharPreview(type) {
         b( 10, 13, 2, 4, '#EE4422');
     }
 
-    // Boots
-    b(isSB ? -5 : -7, isSB ? 10 : 9, isSB ? 4 : 5, 6, '#222238');
-    b(2, isSB ? 10 : 9, isSB ? 4 : 5, 6, '#222238');
+    // Boots – dark
+    b(isSB ? -5 : -7, isSB ? 10 : 9, isSB ? 4 : 5, 6, '#2A2A30');
+    b(2, isSB ? 10 : 9, isSB ? 4 : 5, 6, '#2A2A30');
 
-    // Pants
-    b(-6, 1, 4, 9, '#1040A0');
-    b( 2, 1, 4, 9, '#1040A0');
-    b(-5, 1, 2, 5, '#1858C0');
-    b( 3, 1, 2, 5, '#1858C0');
+    // Pants – blue
+    b(-6, 1, 4, 9, '#1858C0');
+    b( 2, 1, 4, 9, '#1858C0');
+    b(-5, 1, 2, 5, '#2870D8');
+    b( 3, 1, 2, 5, '#2870D8');
 
-    // Jacket
-    const jMain = isSB ? '#1B8B6B' : '#2060D0';
-    const jHi   = isSB ? '#28A880' : '#3878F0';
-    const jSh   = isSB ? '#126048' : '#1440A0';
+    // Jacket – blue (both types)
+    const jMain = '#2878C8';
+    const jHi   = '#3C90E0';
+    const jSh   = '#1858A0';
     b(-7,-14, 14, 16, jMain);
     b(-7,-14,  2, 16, jSh);
     b( 5,-14,  2, 16, jSh);
     b(-5,-14, 10,  2, jHi);
+    b(-1, -4,  2,  2, '#FFD700'); // zipper detail
 
-    // Arms
+    // Arms + dark gloves
     if (isSB) {
         b(-14,-10, 8, 6, jMain); b( 6,-10, 8, 6, jMain);
-        b(-14, -6, 4, 4, '#E8D8B0'); b(10, -6, 4, 4, '#E8D8B0');
+        b(-16, -6, 6, 5, '#2A2A30'); b(10, -6, 6, 5, '#2A2A30');
     } else {
         b(-12, -9, 6, 6, jMain); b( 6, -9, 6, 6, jMain);
-        b(-12, -5, 4, 4, '#E8D8B0'); b( 8, -5, 4, 4, '#E8D8B0');
+        b(-14, -5, 6, 5, '#2A2A30'); b( 8, -5, 6, 5, '#2A2A30');
     }
 
-    // Neck + Head
-    b(-2,-16, 4, 4, '#FFCC88');
-    b(-5,-24, 10, 9, '#FFCC88');
-    b(-5,-24, 2, 9, '#EAB070');
-    b( 3,-24, 2, 9, '#EAB070');
+    // Neck + Head – warm peach skin
+    b(-2,-16, 4, 4, '#F0B880');
+    b(-5,-24, 10, 9, '#F0B880');
+    b(-5,-24, 2, 9, '#D8A068');
+    b( 3,-24, 2, 9, '#D8A068');
 
-    // Goggles
-    b(-4,-22, 3, 4, '#E0B800');
-    b( 1,-22, 3, 4, '#E0B800');
+    // Goggles – blue tinted
+    b(-5,-22, 4, 4, '#4488CC');
+    b( 1,-22, 4, 4, '#4488CC');
     b(-1,-22, 2, 3, '#333');
-    b(-3,-22, 1, 1, '#FFE860');
-    b( 2,-22, 1, 1, '#FFE860');
+    b(-4,-21, 1, 1, '#88CCFF');
+    b( 3,-21, 1, 1, '#88CCFF');
 
-    // Hat
-    b(-5,-26, 10, 3, '#BB0000');
-    b(-4,-32, 8, 6, '#DD1010');
-    b(-3,-32, 4, 6, '#EE2222');
-    b(-3,-35, 6, 3, '#F8F8F8');
-    b(-2,-37, 4, 2, '#E8E8E8');
-    b(-1,-38, 2, 1, '#FFFFFF');
+    // Helmet – grey rounded
+    b(-6,-26, 12, 4, '#606878');
+    b(-5,-32, 10, 7, '#707880');
+    b(-4,-33, 8, 2, '#808890');
+    b(-3,-34, 6, 2, '#909AA0');
+    b(-4,-32, 3, 5, '#808890');
+    b( 3,-30, 2, 4, '#585E68');
+    b(-7,-28, 2, 6, '#585E68');
+    b( 5,-28, 2, 6, '#585E68');
 }
 
 // ─── HUD ──────────────────────────────────────────────────────────────────────
@@ -1254,8 +1305,8 @@ function render() {
         return;
     }
 
-    // Snow background
-    ctx.fillStyle = '#E8E8E8';
+    // Snow background – cool white with slight blue tint
+    ctx.fillStyle = '#E8ECF2';
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
     // Obstacles (sorted by depth)
