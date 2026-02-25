@@ -984,8 +984,9 @@ function checkPowerupCollision(p) {
 
 // ─── Power-up actions ─────────────────────────────────────────────────────────
 
-function usePowerup() {
+function usePowerup(direction) {
     if (!heldPowerup) return;
+    direction = direction || 'forward';
     const type = heldPowerup;
     heldPowerup = null;
 
@@ -999,14 +1000,10 @@ function usePowerup() {
         shieldTimer = 360;
 
     } else if (type === 'snowball') {
-        let vx = 0, vy = -10;
-        if (yeti.active) {
-            const dx = yeti.x - skier.x;
-            const dy = yeti.y - skier.y;
-            const d  = Math.sqrt(dx*dx + dy*dy) || 1;
-            vx = (dx/d) * 10;
-            vy = (dy/d) * 10 - speed * 0.5;
-        }
+        // Forward = downhill (toward bottom of screen), backward = uphill (toward top)
+        const dirSign = direction === 'forward' ? 1 : -1;
+        let vx = skier.angle * 2;
+        let vy = dirSign * 10;
         powerupProjectiles.push({ type: 'snowball', x: skier.x, y: skier.y, vx, vy, scrollCompensation: true });
 
     } else if (type === 'freeze') {
@@ -1015,9 +1012,10 @@ function usePowerup() {
         if (yeti.active) { yeti.frozen = true; yeti.frozenTimer = 240; }
 
     } else if (type === 'bomb') {
+        const dirSign = direction === 'forward' ? 1 : -1;
         powerupProjectiles.push({
             type: 'bomb', x: skier.x, y: skier.y,
-            vx: skier.angle * 2, vy: -6,
+            vx: skier.angle * 2, vy: dirSign * 6,
             timer: 60, scrollCompensation: true
         });
     }
@@ -1250,6 +1248,7 @@ function drawCharPreview(type) {
 function drawPowerupHUD() {
     // Positioned right of the jump button (both on the left side of screen)
     const hx = 85, hy = GAME_HEIGHT - 52;
+    const isDirectional = heldPowerup === 'snowball' || heldPowerup === 'bomb';
 
     // Background
     ctx.fillStyle = 'rgba(5,15,30,0.72)';
@@ -1263,17 +1262,47 @@ function drawPowerupHUD() {
         : 'rgba(42,96,128,0.2)';
     ctx.lineWidth = 1; ctx.strokeRect(hx + 2, hy + 2, 126, 40);
 
-    // Label
-    ctx.fillStyle = '#66BBDD'; ctx.font = 'bold 10px "Orbitron", "Courier New", monospace'; ctx.textAlign = 'left';
-    ctx.fillText('POWER-UP', hx + 6, hy + 14);
+    if (heldPowerup && isDirectional) {
+        // Show power-up name in label area
+        ctx.fillStyle = POWERUP_COLORS[heldPowerup];
+        ctx.font = 'bold 10px "Orbitron", "Courier New", monospace'; ctx.textAlign = 'left';
+        ctx.fillText(heldPowerup.toUpperCase(), hx + 6, hy + 14);
 
-    if (heldPowerup) {
+        // Split bar into backward (left) and forward (right) buttons
+        const col = POWERUP_COLORS[heldPowerup];
+        const barX = hx + 5, barY = hy + 19, barH = 19;
+        const halfW = 58, gap = 4;
+
+        // Left button - backward (uphill)
+        ctx.fillStyle = col; ctx.globalAlpha = 0.8;
+        ctx.fillRect(barX, barY, halfW, barH);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#000'; ctx.font = 'bold 11px "Orbitron", "Courier New", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('\u25C4 Q', barX + halfW / 2, barY + 14);
+
+        // Right button - forward (downhill)
+        ctx.fillStyle = col; ctx.globalAlpha = 0.8;
+        ctx.fillRect(barX + halfW + gap, barY, halfW, barH);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#000'; ctx.font = 'bold 11px "Orbitron", "Courier New", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('E \u25BA', barX + halfW + gap + halfW / 2, barY + 14);
+    } else if (heldPowerup) {
+        // Label
+        ctx.fillStyle = '#66BBDD'; ctx.font = 'bold 10px "Orbitron", "Courier New", monospace'; ctx.textAlign = 'left';
+        ctx.fillText('POWER-UP', hx + 6, hy + 14);
+
         const col = POWERUP_COLORS[heldPowerup];
         ctx.fillStyle = col;
         ctx.fillRect(hx + 5, hy + 19, 120, 19);
         ctx.fillStyle = '#000'; ctx.font = 'bold 11px "Orbitron", "Courier New", monospace';
         ctx.fillText(heldPowerup.toUpperCase() + '  [E]', hx + 9, hy + 33);
     } else {
+        // Label
+        ctx.fillStyle = '#66BBDD'; ctx.font = 'bold 10px "Orbitron", "Courier New", monospace'; ctx.textAlign = 'left';
+        ctx.fillText('POWER-UP', hx + 6, hy + 14);
+
         ctx.fillStyle = '#334455'; ctx.font = '10px "Orbitron", "Courier New", monospace';
         ctx.fillText('- empty -', hx + 6, hy + 33);
     }
@@ -1686,10 +1715,11 @@ document.addEventListener('keydown', e => {
         case ' ':
             if (gameState === 'crashed' || gameState === 'caught') { resetGame(); }
             else if (gameState === 'eating') { gameState = 'caught'; }
-            else if (heldPowerup) { usePowerup(); }
+            else if (heldPowerup) { usePowerup('forward'); }
             else { keys.space = true; }
             e.preventDefault(); break;
-        case 'e': case 'q': usePowerup(); break;
+        case 'q': usePowerup('backward'); break;
+        case 'e': usePowerup('forward'); break;
     }
 });
 document.addEventListener('keyup', e => {
@@ -1724,7 +1754,19 @@ canvas.addEventListener('click', e => {
     }
     if (gameState === 'crashed' || gameState === 'caught') { resetGame(); return; }
     if (gameState === 'eating') { gameState = 'caught'; return; }
-    if (heldPowerup) usePowerup();
+    if (heldPowerup) {
+        const rect = canvas.getBoundingClientRect();
+        const cx = (e.clientX - rect.left) / scale;
+        const cy = (e.clientY - rect.top) / scale;
+        // Check if click is on the power-up HUD for directional aiming
+        const isDirectional = heldPowerup === 'snowball' || heldPowerup === 'bomb';
+        if (isDirectional && cx >= 80 && cx < 220 && cy > GAME_HEIGHT - 58) {
+            const hudMid = 85 + 65;
+            usePowerup(cx < hudMid ? 'backward' : 'forward');
+        } else {
+            usePowerup('forward');
+        }
+    }
 });
 
 canvas.addEventListener('contextmenu', e => e.preventDefault());
@@ -1763,7 +1805,11 @@ canvas.addEventListener('touchstart', e => {
 
     // Tap power-up HUD area (right of jump button, x=85..215, bottom strip)
     if (pos.x >= 80 && pos.x < 220 && pos.y > GAME_HEIGHT - 58) {
-        usePowerup(); return;
+        // For directional power-ups (snowball/bomb), left half = backward, right half = forward
+        const hudMid = 85 + 65; // midpoint of HUD at x=150
+        const isDirectional = heldPowerup === 'snowball' || heldPowerup === 'bomb';
+        const direction = isDirectional ? (pos.x < hudMid ? 'backward' : 'forward') : 'forward';
+        usePowerup(direction); return;
     }
 
     // Begin relative drag steering
