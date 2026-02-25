@@ -48,15 +48,14 @@ let tombstonePlaced = false;
 let tombstoneObj = null;
 
 // Power-up state
-let heldPowerup = null;
 let powerupPickups = [];
 let powerupProjectiles = [];
-let shieldActive = false;
-let shieldTimer = 0;
-let freezeActive = false;
-let freezeTimer = 0;
-let boostActive = false;
-let boostTimer = 0;
+
+// Pistol & gun upgrade state
+let pistolCooldown = 0;
+const BASE_PISTOL_COOLDOWN = 20;
+let gunUpgrade = null;       // null, 'boost', 'snowball', 'shield', 'freeze', 'bomb'
+let gunUpgradeTimer = 0;
 
 // Skier
 const skier = {
@@ -391,8 +390,8 @@ function drawSkier() {
     ctx.save();
     ctx.translate(skier.x, skier.y - jumpHeight);
 
-    // Shield glow ring
-    if (shieldActive) {
+    // Shield glow ring (spread-shot upgrade)
+    if (gunUpgrade === 'shield') {
         ctx.strokeStyle = `rgba(0,255,127,${0.5 + 0.5 * Math.sin(Date.now() / 100)})`;
         ctx.lineWidth = 4;
         ctx.beginPath(); ctx.arc(0, -10, 30, 0, Math.PI*2); ctx.stroke();
@@ -506,7 +505,7 @@ function drawSkier() {
 
     // ── JACKET ───────────────────────────────────────────────────────────────
     let jMain, jHi, jSh;
-    if (boostActive) {
+    if (gunUpgrade === 'boost') {
         jMain = '#D06000'; jHi = '#F08820'; jSh = '#904000';
     } else if (isSB) {
         jMain = '#2878C8'; jHi = '#3C90E0'; jSh = '#1858A0';
@@ -925,15 +924,50 @@ function drawProjectiles() {
     powerupProjectiles.forEach(proj => {
         ctx.save();
         ctx.translate(proj.x, proj.y);
-        if (proj.type === 'snowball') {
-            ctx.fillStyle = '#FFFFFF'; ctx.strokeStyle = '#87CEEB'; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-        } else if (proj.type === 'bomb') {
-            ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#FFD700'; ctx.fillRect(-2, -18, 4, 8);
-            if (Math.random() < 0.5) {
-                ctx.fillStyle = '#FF4500';
-                ctx.beginPath(); ctx.arc(Math.random()*6-3, -20, 4, 0, Math.PI*2); ctx.fill();
+        if (proj.type === 'bullet') {
+            const r = proj.radius || 4;
+            const sub = proj.subtype;
+            if (sub === 'boost') {
+                // Gold rapid-fire bullet
+                ctx.fillStyle = '#FFD700'; ctx.strokeStyle = '#FFA000'; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                ctx.fillStyle = '#FFF8C0'; ctx.beginPath(); ctx.arc(-1, -1, r * 0.4, 0, Math.PI*2); ctx.fill();
+            } else if (sub === 'snowball') {
+                // Ice shot – blue/white ball
+                ctx.fillStyle = '#FFFFFF'; ctx.strokeStyle = '#87CEEB'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                ctx.fillStyle = '#C4E8FF'; ctx.beginPath(); ctx.arc(-2, -2, r * 0.4, 0, Math.PI*2); ctx.fill();
+            } else if (sub === 'shield') {
+                // Green spread bullet
+                ctx.fillStyle = '#00FF7F'; ctx.strokeStyle = '#00AA55'; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                ctx.fillStyle = '#80FFB8'; ctx.beginPath(); ctx.arc(-1, -1, r * 0.4, 0, Math.PI*2); ctx.fill();
+            } else if (sub === 'freeze') {
+                // Cyan cryo crystal
+                ctx.fillStyle = '#00BFFF'; ctx.strokeStyle = '#0080AA'; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                // Small ice shard lines
+                ctx.strokeStyle = 'rgba(180,230,255,0.8)'; ctx.lineWidth = 1;
+                for (let i = 0; i < 4; i++) {
+                    const a = i * Math.PI / 2 + Date.now() / 300;
+                    ctx.beginPath(); ctx.moveTo(0, 0);
+                    ctx.lineTo(Math.cos(a) * r * 1.4, Math.sin(a) * r * 1.4); ctx.stroke();
+                }
+            } else if (sub === 'bomb') {
+                // Red/orange explosive round
+                ctx.fillStyle = '#FF6347'; ctx.strokeStyle = '#B03828'; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                ctx.fillStyle = '#FF9A88'; ctx.beginPath(); ctx.arc(-1, -1, r * 0.4, 0, Math.PI*2); ctx.fill();
+                // Fire particle
+                if (Math.random() < 0.5) {
+                    ctx.fillStyle = '#FFD700';
+                    ctx.beginPath(); ctx.arc(Math.random()*4-2, -r - 2, 2, 0, Math.PI*2); ctx.fill();
+                }
+            } else {
+                // Base bullet – bright white/yellow
+                ctx.fillStyle = '#FFFFCC'; ctx.strokeStyle = '#DDAA44'; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); ctx.arc(-0.5, -0.5, r * 0.4, 0, Math.PI*2); ctx.fill();
             }
         }
         ctx.restore();
@@ -989,54 +1023,78 @@ function checkPowerupCollision(p) {
     return Math.sqrt(dx*dx + dy*dy) < p.radius + 15;
 }
 
-// ─── Power-up actions ─────────────────────────────────────────────────────────
+// ─── Gun upgrade & pistol ─────────────────────────────────────────────────────
 
-function usePowerup(direction) {
-    if (!heldPowerup) return;
-    direction = direction || 'forward';
-    const type = heldPowerup;
-    heldPowerup = null;
+// Gun upgrade config: cooldown, bullet speed, radius, pierce, blastRadius, yetiStun
+const GUN_CONFIGS = {
+    base:     { cooldown: 20, speed: 12, radius: 4,  pierce: 0, blast: 0,  yetiStun: 60,  yetiFreeze: 0,   spread: 1 },
+    boost:    { cooldown:  8, speed: 16, radius: 4,  pierce: 0, blast: 0,  yetiStun: 60,  yetiFreeze: 0,   spread: 1 },
+    snowball: { cooldown: 20, speed: 10, radius: 8,  pierce: 1, blast: 0,  yetiStun: 0,   yetiFreeze: 180, spread: 1 },
+    shield:   { cooldown: 24, speed: 12, radius: 4,  pierce: 0, blast: 0,  yetiStun: 60,  yetiFreeze: 0,   spread: 3 },
+    freeze:   { cooldown: 20, speed: 11, radius: 6,  pierce: 0, blast: 60, yetiStun: 0,   yetiFreeze: 240, spread: 1 },
+    bomb:     { cooldown: 24, speed: 10, radius: 6,  pierce: 0, blast: 80, yetiStun: 300, yetiFreeze: 0,   spread: 1 }
+};
 
-    if (type === 'boost') {
-        boostActive = true;
-        boostTimer = 300;
-        speed = Math.min(maxSpeed, speed + 4);
+const GUN_UPGRADE_DURATIONS = { boost: 300, snowball: 300, shield: 360, freeze: 240, bomb: 240 };
 
-    } else if (type === 'shield') {
-        shieldActive = true;
-        shieldTimer = 360;
+function applyGunUpgrade(type) {
+    gunUpgrade = type;
+    gunUpgradeTimer = GUN_UPGRADE_DURATIONS[type] || 300;
+    // Boost also gives a speed kick
+    if (type === 'boost') speed = Math.min(maxSpeed, speed + 4);
+}
 
-    } else if (type === 'snowball') {
-        // Forward = downhill (toward bottom of screen), backward = uphill (toward top)
-        const dirSign = direction === 'forward' ? 1 : -1;
+function getGunConfig() {
+    return GUN_CONFIGS[gunUpgrade] || GUN_CONFIGS.base;
+}
+
+function shootPistol(direction) {
+    if (gameState !== 'playing' && gameState !== 'jumping') return;
+    const cfg = getGunConfig();
+    if (pistolCooldown > 0) return;
+    pistolCooldown = cfg.cooldown;
+
+    const dirSign = direction === 'backward' ? -1 : 1;
+    const bulletSpeed = cfg.speed;
+    const subtype = gunUpgrade || 'base';
+
+    for (let s = 0; s < cfg.spread; s++) {
         let vx = skier.angle * 2;
-        let vy = dirSign * 10;
-        powerupProjectiles.push({ type: 'snowball', x: skier.x, y: skier.y, vx, vy, scrollCompensation: true });
+        let vy = dirSign * bulletSpeed;
 
-    } else if (type === 'freeze') {
-        freezeActive = true;
-        freezeTimer = 240;
-        if (yeti.active) { yeti.frozen = true; yeti.frozenTimer = 240; }
+        // Spread: fan out for multi-shot
+        if (cfg.spread === 3) {
+            const spreadAngle = (s - 1) * 0.35; // -0.35, 0, +0.35
+            vx += Math.sin(spreadAngle) * bulletSpeed * 0.5;
+            vy = dirSign * (bulletSpeed * Math.cos(spreadAngle));
+        }
 
-    } else if (type === 'bomb') {
-        const dirSign = direction === 'forward' ? 1 : -1;
         powerupProjectiles.push({
-            type: 'bomb', x: skier.x, y: skier.y,
-            vx: skier.angle * 2, vy: dirSign * 6,
-            timer: 60, scrollCompensation: true
+            type: 'bullet', subtype: subtype,
+            x: skier.x, y: skier.y - jumpHeight,
+            vx, vy,
+            radius: cfg.radius,
+            pierce: cfg.pierce,
+            blast: cfg.blast,
+            yetiStun: cfg.yetiStun,
+            yetiFreeze: cfg.yetiFreeze,
+            scrollCompensation: true
         });
     }
 }
 
-function explodeBomb(bx, by) {
-    const R = 80;
+function detonateArea(bx, by, radius, stunDuration, freezeDuration) {
     obstacles.forEach(obs => {
+        if (obs.type === 'jump') return;
         const dx = bx - obs.x, dy = by - obs.y;
-        if (Math.sqrt(dx*dx + dy*dy) < R) obs.destroyed = true;
+        if (Math.sqrt(dx*dx + dy*dy) < radius) obs.destroyed = true;
     });
     if (yeti.active) {
         const dx = bx - yeti.x, dy = by - yeti.y;
-        if (Math.sqrt(dx*dx + dy*dy) < R) { yeti.stunned = true; yeti.stunnedTimer = 300; }
+        if (Math.sqrt(dx*dx + dy*dy) < radius) {
+            if (freezeDuration > 0) { yeti.frozen = true; yeti.frozenTimer = freezeDuration; }
+            if (stunDuration > 0)   { yeti.stunned = true; yeti.stunnedTimer = stunDuration; }
+        }
     }
 }
 
@@ -1252,81 +1310,64 @@ function drawCharPreview(type) {
 
 // ─── HUD ──────────────────────────────────────────────────────────────────────
 
-function drawPowerupHUD() {
-    // Positioned right of the jump button (both on the left side of screen)
+function drawGunHUD() {
+    // Gun status display – positioned right of the jump button
     const hx = 85, hy = GAME_HEIGHT - 52;
-    const isDirectional = heldPowerup === 'snowball' || heldPowerup === 'bomb';
+    const upgradeCol = gunUpgrade ? POWERUP_COLORS[gunUpgrade] : null;
 
     // Background
     ctx.fillStyle = 'rgba(5,15,30,0.72)';
     ctx.fillRect(hx, hy, 130, 44);
 
     // Border
-    ctx.strokeStyle = heldPowerup ? POWERUP_COLORS[heldPowerup] : '#2A6080';
+    ctx.strokeStyle = upgradeCol || '#2A6080';
     ctx.lineWidth = 2; ctx.strokeRect(hx, hy, 130, 44);
-    ctx.strokeStyle = heldPowerup
-        ? POWERUP_COLORS[heldPowerup] + '33'
-        : 'rgba(42,96,128,0.2)';
+    ctx.strokeStyle = upgradeCol ? upgradeCol + '33' : 'rgba(42,96,128,0.2)';
     ctx.lineWidth = 1; ctx.strokeRect(hx + 2, hy + 2, 126, 40);
 
-    if (heldPowerup && isDirectional) {
-        // Show power-up name in label area
-        ctx.fillStyle = POWERUP_COLORS[heldPowerup];
-        ctx.font = 'bold 10px "Orbitron", "Courier New", monospace'; ctx.textAlign = 'left';
-        ctx.fillText(heldPowerup.toUpperCase(), hx + 6, hy + 14);
+    // Gun label
+    ctx.fillStyle = '#66BBDD'; ctx.font = 'bold 10px "Orbitron", "Courier New", monospace'; ctx.textAlign = 'left';
+    ctx.fillText('GUN', hx + 6, hy + 14);
 
-        // Split bar into backward (left) and forward (right) buttons
-        const col = POWERUP_COLORS[heldPowerup];
-        const barX = hx + 5, barY = hy + 19, barH = 19;
-        const halfW = 58, gap = 4;
-
-        // Left button - backward (uphill)
-        ctx.fillStyle = col; ctx.globalAlpha = 0.8;
-        ctx.fillRect(barX, barY, halfW, barH);
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = '#000'; ctx.font = 'bold 11px "Orbitron", "Courier New", monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText('\u25C4 Q', barX + halfW / 2, barY + 14);
-
-        // Right button - forward (downhill)
-        ctx.fillStyle = col; ctx.globalAlpha = 0.8;
-        ctx.fillRect(barX + halfW + gap, barY, halfW, barH);
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = '#000'; ctx.font = 'bold 11px "Orbitron", "Courier New", monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText('E \u25BA', barX + halfW + gap + halfW / 2, barY + 14);
-    } else if (heldPowerup) {
-        // Label
-        ctx.fillStyle = '#66BBDD'; ctx.font = 'bold 10px "Orbitron", "Courier New", monospace'; ctx.textAlign = 'left';
-        ctx.fillText('POWER-UP', hx + 6, hy + 14);
-
-        const col = POWERUP_COLORS[heldPowerup];
-        ctx.fillStyle = col;
-        ctx.fillRect(hx + 5, hy + 19, 120, 19);
-        ctx.fillStyle = '#000'; ctx.font = 'bold 11px "Orbitron", "Courier New", monospace';
-        ctx.fillText(heldPowerup.toUpperCase() + '  [E]', hx + 9, hy + 33);
-    } else {
-        // Label
-        ctx.fillStyle = '#66BBDD'; ctx.font = 'bold 10px "Orbitron", "Courier New", monospace'; ctx.textAlign = 'left';
-        ctx.fillText('POWER-UP', hx + 6, hy + 14);
-
-        ctx.fillStyle = '#334455'; ctx.font = '10px "Orbitron", "Courier New", monospace';
-        ctx.fillText('- empty -', hx + 6, hy + 33);
+    // Cooldown pip (small dot showing ready-to-fire)
+    if (pistolCooldown <= 0) {
+        ctx.fillStyle = '#00FF88';
+        ctx.beginPath(); ctx.arc(hx + 32, hy + 10, 3, 0, Math.PI * 2); ctx.fill();
     }
 
-    // Active timer badges – colors match their power-up type consistently
+    if (gunUpgrade) {
+        const GUN_NAMES = { boost: 'RAPID FIRE', snowball: 'ICE SHOT', shield: 'SPREAD', freeze: 'CRYO', bomb: 'EXPLOSIVE' };
+        const sec = Math.ceil(gunUpgradeTimer / 60);
+
+        // Upgrade bar with timer
+        ctx.fillStyle = upgradeCol; ctx.globalAlpha = 0.8;
+        ctx.fillRect(hx + 5, hy + 19, 120, 19);
+        ctx.globalAlpha = 1;
+
+        // Timer bar (fading portion)
+        const maxDur = GUN_UPGRADE_DURATIONS[gunUpgrade] || 300;
+        const frac = gunUpgradeTimer / maxDur;
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.fillRect(hx + 5 + 120 * frac, hy + 19, 120 * (1 - frac), 19);
+
+        ctx.fillStyle = '#000'; ctx.font = 'bold 10px "Orbitron", "Courier New", monospace';
+        ctx.fillText((GUN_NAMES[gunUpgrade] || gunUpgrade.toUpperCase()) + ' ' + sec + 's', hx + 9, hy + 33);
+    } else {
+        ctx.fillStyle = '#556688'; ctx.font = '10px "Orbitron", "Courier New", monospace';
+        ctx.fillText('PISTOL', hx + 6, hy + 33);
+    }
+
+    // Yeti status badges (stacked above HUD)
     let ty = hy - 6;
     const badge = (label, col, sec) => {
         ctx.fillStyle = 'rgba(5,15,30,0.6)';
         ctx.fillRect(hx, ty - 16, 110, 18);
         ctx.fillStyle = col;
         ctx.fillRect(hx, ty - 16, 110, 18);
-        ctx.fillStyle = '#000'; ctx.font = 'bold 10px "Orbitron", "Courier New", monospace';
+        ctx.fillStyle = '#000'; ctx.font = 'bold 10px "Orbitron", "Courier New", monospace'; ctx.textAlign = 'left';
         ctx.fillText(label + ' ' + sec + 's', hx + 4, ty - 3);
         ty -= 21;
     };
-    if (shieldActive) badge('SHIELD',   'rgba(0,255,127,0.8)',  Math.ceil(shieldTimer/60));
-    if (boostActive)  badge('BOOST',    'rgba(255,215,0,0.8)',  Math.ceil(boostTimer/60));
     if (yeti.frozen)  badge('YT FROZE', 'rgba(0,191,255,0.8)',  Math.ceil(yeti.frozenTimer/60));
     if (yeti.stunned) badge('YT STUN',  'rgba(255,140,0,0.85)', Math.ceil(yeti.stunnedTimer/60));
 }
@@ -1364,6 +1405,35 @@ function drawMobileButtons() {
     ctx.textBaseline = 'alphabetic';
 
     ctx.restore();
+
+    // ── Shoot buttons – bottom-right, separate from steering hand ────────────
+    const drawShootBtn = (bx, by, label, flashCol) => {
+        ctx.save();
+        const justFired = pistolCooldown > (getGunConfig().cooldown - 3);
+        ctx.shadowColor = justFired ? flashCol : '#DD4400';
+        ctx.shadowBlur = justFired ? 18 : 10;
+
+        ctx.fillStyle = justFired ? 'rgba(80,20,0,0.7)' : 'rgba(50,10,0,0.6)';
+        ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI*2); ctx.fill();
+
+        const btnCol = gunUpgrade ? POWERUP_COLORS[gunUpgrade] : '#FF6633';
+        ctx.strokeStyle = btnCol; ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        ctx.shadowBlur = 0;
+
+        ctx.strokeStyle = 'rgba(255,100,50,0.25)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(bx, by, r - 6, 0, Math.PI*2); ctx.stroke();
+
+        ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 14px "Orbitron", "Courier New", monospace';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(label, bx, by);
+        ctx.textBaseline = 'alphabetic';
+        ctx.restore();
+    };
+
+    drawShootBtn(GAME_WIDTH - 110, GAME_HEIGHT - 38, '\u25C4', '#FF8800');
+    drawShootBtn(GAME_WIDTH - 44,  GAME_HEIGHT - 38, '\u25BA', '#FF4400');
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
@@ -1407,12 +1477,11 @@ function update() {
         if (speed < baseSpeed) speed += 0.02;
     }
 
-    // Active power-up timers
-    if (boostActive)  { boostTimer--;  if (boostTimer  <= 0) boostActive  = false; }
-    if (shieldActive) { shieldTimer--; if (shieldTimer <= 0) shieldActive = false; }
+    // Gun upgrade & pistol cooldown timers
+    if (gunUpgradeTimer > 0) { gunUpgradeTimer--; if (gunUpgradeTimer <= 0) gunUpgrade = null; }
+    if (pistolCooldown > 0) pistolCooldown--;
     if (yeti.frozen)  { yeti.frozenTimer--;  if (yeti.frozenTimer  <= 0) yeti.frozen  = false; }
     if (yeti.stunned) { yeti.stunnedTimer--; if (yeti.stunnedTimer <= 0) yeti.stunned = false; }
-    if (freezeActive) { freezeTimer--; if (freezeTimer <= 0) freezeActive = false; }
 
     // Jump physics
     if (jumpHeight > 0 || jumpVelocity > 0) {
@@ -1453,15 +1522,13 @@ function update() {
         tombstonePlaced = true;
     }
     if (tombstoneObj) {
-        if (!freezeActive) tombstoneObj.y -= speed;
+        tombstoneObj.y -= speed;
         if (tombstoneObj.y < -80) tombstoneObj = null;
     }
 
-    // Move obstacles (frozen = paused)
-    if (!freezeActive) {
-        obstacles.forEach(obs => { obs.y -= speed; });
-        powerupPickups.forEach(p  => { p.y  -= speed; });
-    }
+    // Move obstacles
+    obstacles.forEach(obs => { obs.y -= speed; });
+    powerupPickups.forEach(p  => { p.y  -= speed; });
 
     // Cull off-screen
     obstacles     = obstacles.filter(o => o.y > -50 && !o.destroyed);
@@ -1474,62 +1541,78 @@ function update() {
     if (Math.random() < JUMP_SPAWN_RATE    * spd * difficulty) spawnObstacle(GAME_HEIGHT + 50);
     if (Math.random() < POWERUP_SPAWN_RATE * spd)              spawnPowerup(GAME_HEIGHT + 50);
 
-    // Collect power-ups
+    // Collect power-ups – auto-apply gun upgrade on pickup
     for (let i = powerupPickups.length - 1; i >= 0; i--) {
         if (checkPowerupCollision(powerupPickups[i])) {
-            heldPowerup = powerupPickups[i].type;
+            applyGunUpgrade(powerupPickups[i].type);
             powerupPickups.splice(i, 1);
         }
     }
 
-    // Obstacle collisions
-    if (!shieldActive) {
-        for (const obs of obstacles) {
-            if (checkCollision(obs)) {
-                if (obs.type === 'jump') {
-                    if (jumpHeight === 0) { jumpVelocity = 12; gameState = 'jumping'; }
-                } else {
-                    gameState = 'crashed'; speed = 0;
-                    checkAndSaveHighScore();
-                }
+    // Obstacle collisions (shield upgrade grants invulnerability to trees/rocks)
+    for (const obs of obstacles) {
+        if (checkCollision(obs)) {
+            if (obs.type === 'jump') {
+                if (jumpHeight === 0) { jumpVelocity = 12; gameState = 'jumping'; }
+            } else if (gunUpgrade !== 'shield') {
+                gameState = 'crashed'; speed = 0;
+                checkAndSaveHighScore();
             }
         }
     }
 
-    // Power-up projectiles
+    // Projectile update (bullets from pistol)
     for (let i = powerupProjectiles.length - 1; i >= 0; i--) {
         const proj = powerupProjectiles[i];
         proj.x += proj.vx;
         proj.y += proj.vy - speed * 0.5;
 
-        if (proj.type === 'bomb') {
-            proj.timer--;
-            if (proj.timer <= 0) {
-                explodeBomb(proj.x, proj.y);
-                powerupProjectiles.splice(i, 1);
-                continue;
-            }
-        }
+        let removeProj = false;
 
+        // Yeti hit check
         if (yeti.active && !yeti.frozen && !yeti.stunned) {
             const dx = proj.x - yeti.x, dy = proj.y - yeti.y;
             if (Math.sqrt(dx*dx + dy*dy) < 50) {
-                if (proj.type === 'snowball') { yeti.stunned = true; yeti.stunnedTimer = 180; }
-                else if (proj.type === 'bomb') { explodeBomb(proj.x, proj.y); }
-                powerupProjectiles.splice(i, 1); continue;
+                if (proj.blast > 0) {
+                    detonateArea(proj.x, proj.y, proj.blast, proj.yetiStun, proj.yetiFreeze);
+                } else {
+                    if (proj.yetiFreeze > 0) { yeti.frozen = true; yeti.frozenTimer = proj.yetiFreeze; }
+                    if (proj.yetiStun > 0)   { yeti.stunned = true; yeti.stunnedTimer = proj.yetiStun; }
+                }
+                removeProj = true;
             }
         }
 
-        let hitObstacle = false;
-        for (const obs of obstacles) {
-            if (obs.type === 'jump') continue;
-            const dx = proj.x - obs.x, dy = proj.y - obs.y;
-            if (Math.sqrt(dx*dx + dy*dy) < 25) {
-                obs.destroyed = true; hitObstacle = true; break;
+        // Obstacle hit check
+        if (!removeProj) {
+            if (proj.blast > 0) {
+                // AoE bullets detonate on first obstacle contact
+                for (const obs of obstacles) {
+                    if (obs.type === 'jump') continue;
+                    const dx = proj.x - obs.x, dy = proj.y - obs.y;
+                    if (Math.sqrt(dx*dx + dy*dy) < 25) {
+                        detonateArea(proj.x, proj.y, proj.blast, proj.yetiStun, proj.yetiFreeze);
+                        removeProj = true; break;
+                    }
+                }
+            } else {
+                // Single-target or piercing bullets
+                for (const obs of obstacles) {
+                    if (obs.type === 'jump') continue;
+                    const dx = proj.x - obs.x, dy = proj.y - obs.y;
+                    if (Math.sqrt(dx*dx + dy*dy) < 25) {
+                        obs.destroyed = true;
+                        if (proj.pierce > 0) { proj.pierce--; }
+                        else { removeProj = true; }
+                        break;
+                    }
+                }
             }
         }
-        if (hitObstacle) { powerupProjectiles.splice(i, 1); continue; }
 
+        if (removeProj) { powerupProjectiles.splice(i, 1); continue; }
+
+        // Out-of-bounds cull
         if (proj.y < -80 || proj.y > GAME_HEIGHT + 80 || proj.x < -80 || proj.x > GAME_WIDTH + 80) {
             powerupProjectiles.splice(i, 1);
         }
@@ -1569,7 +1652,7 @@ function update() {
             yeti.retreatCooldown = 3000;
         }
 
-        if (checkYetiCollision() && jumpHeight < 20 && !shieldActive) {
+        if (checkYetiCollision() && jumpHeight < 20 && gunUpgrade !== 'shield') {
             gameState = 'eating';
             eatingAnimFrame = 0;
             checkAndSaveHighScore();
@@ -1626,7 +1709,7 @@ function render() {
     drawSnow();
 
     // HUD
-    drawPowerupHUD();
+    drawGunHUD();
     drawMobileButtons();
 
     // "Yeti returning" warning banner
@@ -1695,9 +1778,8 @@ function resetGame() {
     yeti.retreatCooldown = 0;
     yeti.frozen = false; yeti.stunned = false;
     eatingAnimFrame = 0;
-    heldPowerup = null;
-    boostActive = shieldActive = freezeActive = false;
-    boostTimer = shieldTimer = freezeTimer = 0;
+    gunUpgrade = null; gunUpgradeTimer = 0;
+    pistolCooldown = 0;
     powerupProjectiles = []; powerupPickups = [];
     tombstonePlaced = false;
     tombstoneObj = null;
@@ -1741,11 +1823,10 @@ document.addEventListener('keydown', e => {
             if (gameState === 'crashed' || gameState === 'caught') { resetGame(); }
             else if (gameState === 'eating') { gameState = 'caught'; }
             else if (gameState === 'jumping' && !flipActive) { flipActive = true; flipRotation = 0; }
-            else if (heldPowerup) { usePowerup('forward'); }
-            else { keys.space = true; }
+            else { shootPistol('forward'); }
             e.preventDefault(); break;
-        case 'q': usePowerup('backward'); break;
-        case 'e': usePowerup('forward'); break;
+        case 'q': shootPistol('backward'); break;
+        case 'e': shootPistol('forward'); break;
     }
 });
 document.addEventListener('keyup', e => {
@@ -1780,18 +1861,14 @@ canvas.addEventListener('click', e => {
     }
     if (gameState === 'crashed' || gameState === 'caught') { resetGame(); return; }
     if (gameState === 'eating') { gameState = 'caught'; return; }
-    if (heldPowerup) {
-        const rect = canvas.getBoundingClientRect();
-        const cx = (e.clientX - rect.left) / scale;
-        const cy = (e.clientY - rect.top) / scale;
-        // Check if click is on the power-up HUD for directional aiming
-        const isDirectional = heldPowerup === 'snowball' || heldPowerup === 'bomb';
-        if (isDirectional && cx >= 80 && cx < 220 && cy > GAME_HEIGHT - 58) {
-            const hudMid = 85 + 65;
-            usePowerup(cx < hudMid ? 'backward' : 'forward');
-        } else {
-            usePowerup('forward');
-        }
+    // Click to shoot – check position for direction
+    const rect = canvas.getBoundingClientRect();
+    const cx = (e.clientX - rect.left) / scale;
+    // Right-side shoot buttons area: backward if left button, forward if right or anywhere else
+    if (cx > GAME_WIDTH - 140 && (e.clientY - rect.top) / scale > GAME_HEIGHT - 68) {
+        shootPistol(cx < GAME_WIDTH - 77 ? 'backward' : 'forward');
+    } else {
+        shootPistol('forward');
     }
 });
 
@@ -1833,13 +1910,15 @@ canvas.addEventListener('touchstart', e => {
         return;
     }
 
-    // Tap power-up HUD area (right of jump button, x=85..215, bottom strip)
-    if (pos.x >= 80 && pos.x < 220 && pos.y > GAME_HEIGHT - 58) {
-        // For directional power-ups (snowball/bomb), left half = backward, right half = forward
-        const hudMid = 85 + 65; // midpoint of HUD at x=150
-        const isDirectional = heldPowerup === 'snowball' || heldPowerup === 'bomb';
-        const direction = isDirectional ? (pos.x < hudMid ? 'backward' : 'forward') : 'forward';
-        usePowerup(direction); return;
+    // Tap right-side SHOOT buttons (backward: center GAME_WIDTH-110, forward: center GAME_WIDTH-44)
+    const shootBtnY = GAME_HEIGHT - 38;
+    const backDx = pos.x - (GAME_WIDTH - 110), backDy = pos.y - shootBtnY;
+    if (Math.sqrt(backDx*backDx + backDy*backDy) < 44) {
+        shootPistol('backward'); return;
+    }
+    const fwdDx = pos.x - (GAME_WIDTH - 44), fwdDy = pos.y - shootBtnY;
+    if (Math.sqrt(fwdDx*fwdDx + fwdDy*fwdDy) < 44) {
+        shootPistol('forward'); return;
     }
 
     // Begin relative drag steering
