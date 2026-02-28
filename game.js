@@ -121,9 +121,6 @@ let speedLines = [];
 // Ski tracks (breadcrumb trail behind player)
 let skiTracks = [];
 
-// Parallax scroll offset for background layers
-let parallaxNearOffset  = 0;   // mid-distance trees (30% speed)
-let parallaxFarOffset   = 0;   // distant mountains (10% speed)
 
 // Power-up types & visuals
 const POWERUP_TYPES  = ['boost', 'snowball', 'shield', 'freeze', 'bomb'];
@@ -495,8 +492,8 @@ function drawSkier() {
             b(  3, 14,  4, 3, '#222');      // rear binding
         } else {
             const dir = ang > 0 ? 1 : -1;
-            b(-12 * dir - 3, 15, 28, 2, '#3A3A44');
-            b(-12 * dir - 3, 14,  4, 3, '#505860');
+            b(10 * dir - 14, 15, 28, 2, '#3A3A44');
+            b(10 * dir - 14, 14,  4, 3, '#505860');
         }
     } else {
         // Skis – red
@@ -509,8 +506,8 @@ function drawSkier() {
             b(  3, 15, 2, 2, '#FF5533');
         } else {
             const dir = ang > 0 ? 1 : -1;
-            b(-10 * dir - 5, 14, 24, 2, '#DD2200');
-            b(-10 * dir - 5, 12,  4, 4, '#EE4422');
+            b(8 * dir - 12, 14, 24, 2, '#DD2200');
+            b(8 * dir - 12, 12,  4, 4, '#EE4422');
         }
     }
 
@@ -1041,78 +1038,14 @@ function updateSnow() {
 // ─── Parallax gradient background ────────────────────────────────────────────
 
 function drawBackground() {
-    // Sky-to-snow gradient for depth
+    // Sky-to-snow gradient
     const bgGrad = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
-    bgGrad.addColorStop(0,   '#B8D4EE');  // pale arctic sky at horizon
-    bgGrad.addColorStop(0.3, '#D0E4F4');  // mid sky
-    bgGrad.addColorStop(0.6, '#E0ECF8');  // snow brightens
-    bgGrad.addColorStop(1,   '#EFF4FA');  // bright snow surface
+    bgGrad.addColorStop(0,   '#B8D4EE');
+    bgGrad.addColorStop(0.3, '#D0E4F4');
+    bgGrad.addColorStop(0.6, '#E0ECF8');
+    bgGrad.addColorStop(1,   '#EFF4FA');
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-
-    // ── Far mountains – barely visible peaks, scroll at 8% of game speed ──
-    const farMtns = [
-        {x: 0,   yPct: 0.18},
-        {x: 90,  yPct: 0.10},
-        {x: 190, yPct: 0.15},
-        {x: 300, yPct: 0.06},
-        {x: 400, yPct: 0.13},
-        {x: 510, yPct: 0.09},
-        {x: 620, yPct: 0.16},
-        {x: 720, yPct: 0.11}
-    ];
-    // Wrap the parallax offset into a repeating tile of 720px
-    const farScroll = parallaxFarOffset % 720;
-    ctx.fillStyle = 'rgba(160, 195, 225, 0.38)';
-    for (let tile = -1; tile <= 1; tile++) {
-        ctx.beginPath();
-        ctx.moveTo(tile * 720 - farScroll, GAME_HEIGHT * 0.32);
-        farMtns.forEach(pt => ctx.lineTo(tile * 720 + pt.x - farScroll, GAME_HEIGHT * pt.yPct));
-        ctx.lineTo(tile * 720 + 720 - farScroll, GAME_HEIGHT * 0.32);
-        ctx.closePath();
-        ctx.fill();
-    }
-
-    // ── Snow cap highlights on far mountains ──
-    ctx.fillStyle = 'rgba(235, 245, 255, 0.55)';
-    const capPeaks = [{x: 90, y: 0.10}, {x: 300, y: 0.06}, {x: 510, y: 0.09}];
-    capPeaks.forEach(pt => {
-        for (let tile = -1; tile <= 1; tile++) {
-            const cx = tile * 720 + pt.x - farScroll;
-            const cy = GAME_HEIGHT * pt.yPct;
-            ctx.beginPath();
-            ctx.moveTo(cx - 28, cy + 18);
-            ctx.lineTo(cx, cy);
-            ctx.lineTo(cx + 28, cy + 18);
-            ctx.closePath();
-            ctx.fill();
-        }
-    });
-
-    // ── Mid treeline – soft silhouettes, scroll at 28% of game speed ──
-    const nearScroll = parallaxNearOffset % 640;
-    ctx.fillStyle = 'rgba(100, 145, 110, 0.22)';
-    for (let tile = -1; tile <= 1; tile++) {
-        const tx = tile * 640 - nearScroll;
-        // Draw a bumpy treeline silhouette
-        ctx.beginPath();
-        ctx.moveTo(tx, GAME_HEIGHT * 0.36);
-        for (let i = 0; i <= 640; i += 28) {
-            const bumpH = (Math.sin(i * 0.09) * 0.5 + 0.5) * 0.08 + 0.22;
-            ctx.lineTo(tx + i, GAME_HEIGHT * (0.36 - bumpH));
-        }
-        ctx.lineTo(tx + 640, GAME_HEIGHT * 0.36);
-        ctx.closePath();
-        ctx.fill();
-    }
-
-    // ── Subtle horizontal snow-surface shimmer band ──
-    const shimmer = ctx.createLinearGradient(0, GAME_HEIGHT * 0.34, 0, GAME_HEIGHT * 0.44);
-    shimmer.addColorStop(0, 'rgba(255,255,255,0)');
-    shimmer.addColorStop(0.5, 'rgba(255,255,255,0.12)');
-    shimmer.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = shimmer;
-    ctx.fillRect(0, GAME_HEIGHT * 0.34, GAME_WIDTH, GAME_HEIGHT * 0.10);
 }
 
 // ─── Ski tracks ───────────────────────────────────────────────────────────────
@@ -1819,10 +1752,6 @@ function update() {
     // Distance
     distance += speed * 0.5;
 
-    // Parallax scroll offsets
-    parallaxFarOffset  += speed * 0.08;
-    parallaxNearOffset += speed * 0.28;
-
     // Effect updates
     emitSpray();
     updateSpray();
@@ -2157,8 +2086,6 @@ function resetGame() {
     floatingTexts      = [];
     skiTracks          = [];
     nextMilestoneIdx   = 0;
-    parallaxFarOffset  = 0;
-    parallaxNearOffset = 0;
     initSpeedLines();
     initObstacles();
 }
