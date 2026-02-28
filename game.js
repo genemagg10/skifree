@@ -102,6 +102,29 @@ const keys = {
 // Touch state
 let activeTouchId = null;
 
+// ─── Visual effects state ─────────────────────────────────────────────────────
+
+// Screen shake
+let screenShakeMag = 0;
+
+// Snow spray particles (reactive to turning)
+let sprayParticles = [];
+
+// Floating feedback texts (pickups, milestones)
+let floatingTexts = [];
+const MILESTONES = [500, 1000, 2000, 3000, 5000, 7500, 10000];
+let nextMilestoneIdx = 0;
+
+// Speed lines (high-velocity streaks)
+let speedLines = [];
+
+// Ski tracks (breadcrumb trail behind player)
+let skiTracks = [];
+
+// Parallax scroll offset for background layers
+let parallaxNearOffset  = 0;   // mid-distance trees (30% speed)
+let parallaxFarOffset   = 0;   // distant mountains (10% speed)
+
 // Power-up types & visuals
 const POWERUP_TYPES  = ['boost', 'snowball', 'shield', 'freeze', 'bomb'];
 const POWERUP_COLORS = {
@@ -134,6 +157,18 @@ function initObstacles() {
     // Start with only 10 obstacles so the slope feels open at first
     for (let i = 0; i < 10; i++) {
         spawnObstacle(Math.random() * GAME_HEIGHT + GAME_HEIGHT);
+    }
+}
+
+function initSpeedLines() {
+    speedLines = [];
+    for (let i = 0; i < 30; i++) {
+        speedLines.push({
+            x: Math.random() * GAME_WIDTH,
+            y: Math.random() * GAME_HEIGHT,
+            length: Math.random() * 60 + 20,
+            speed: Math.random() * 0.4 + 0.8
+        });
     }
 }
 
@@ -1003,6 +1038,276 @@ function updateSnow() {
     });
 }
 
+// ─── Parallax gradient background ────────────────────────────────────────────
+
+function drawBackground() {
+    // Sky-to-snow gradient for depth
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
+    bgGrad.addColorStop(0,   '#B8D4EE');  // pale arctic sky at horizon
+    bgGrad.addColorStop(0.3, '#D0E4F4');  // mid sky
+    bgGrad.addColorStop(0.6, '#E0ECF8');  // snow brightens
+    bgGrad.addColorStop(1,   '#EFF4FA');  // bright snow surface
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+    // ── Far mountains – barely visible peaks, scroll at 8% of game speed ──
+    const farMtns = [
+        {x: 0,   yPct: 0.18},
+        {x: 90,  yPct: 0.10},
+        {x: 190, yPct: 0.15},
+        {x: 300, yPct: 0.06},
+        {x: 400, yPct: 0.13},
+        {x: 510, yPct: 0.09},
+        {x: 620, yPct: 0.16},
+        {x: 720, yPct: 0.11}
+    ];
+    // Wrap the parallax offset into a repeating tile of 720px
+    const farScroll = parallaxFarOffset % 720;
+    ctx.fillStyle = 'rgba(160, 195, 225, 0.38)';
+    for (let tile = -1; tile <= 1; tile++) {
+        ctx.beginPath();
+        ctx.moveTo(tile * 720 - farScroll, GAME_HEIGHT * 0.32);
+        farMtns.forEach(pt => ctx.lineTo(tile * 720 + pt.x - farScroll, GAME_HEIGHT * pt.yPct));
+        ctx.lineTo(tile * 720 + 720 - farScroll, GAME_HEIGHT * 0.32);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    // ── Snow cap highlights on far mountains ──
+    ctx.fillStyle = 'rgba(235, 245, 255, 0.55)';
+    const capPeaks = [{x: 90, y: 0.10}, {x: 300, y: 0.06}, {x: 510, y: 0.09}];
+    capPeaks.forEach(pt => {
+        for (let tile = -1; tile <= 1; tile++) {
+            const cx = tile * 720 + pt.x - farScroll;
+            const cy = GAME_HEIGHT * pt.yPct;
+            ctx.beginPath();
+            ctx.moveTo(cx - 28, cy + 18);
+            ctx.lineTo(cx, cy);
+            ctx.lineTo(cx + 28, cy + 18);
+            ctx.closePath();
+            ctx.fill();
+        }
+    });
+
+    // ── Mid treeline – soft silhouettes, scroll at 28% of game speed ──
+    const nearScroll = parallaxNearOffset % 640;
+    ctx.fillStyle = 'rgba(100, 145, 110, 0.22)';
+    for (let tile = -1; tile <= 1; tile++) {
+        const tx = tile * 640 - nearScroll;
+        // Draw a bumpy treeline silhouette
+        ctx.beginPath();
+        ctx.moveTo(tx, GAME_HEIGHT * 0.36);
+        for (let i = 0; i <= 640; i += 28) {
+            const bumpH = (Math.sin(i * 0.09) * 0.5 + 0.5) * 0.08 + 0.22;
+            ctx.lineTo(tx + i, GAME_HEIGHT * (0.36 - bumpH));
+        }
+        ctx.lineTo(tx + 640, GAME_HEIGHT * 0.36);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    // ── Subtle horizontal snow-surface shimmer band ──
+    const shimmer = ctx.createLinearGradient(0, GAME_HEIGHT * 0.34, 0, GAME_HEIGHT * 0.44);
+    shimmer.addColorStop(0, 'rgba(255,255,255,0)');
+    shimmer.addColorStop(0.5, 'rgba(255,255,255,0.12)');
+    shimmer.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = shimmer;
+    ctx.fillRect(0, GAME_HEIGHT * 0.34, GAME_WIDTH, GAME_HEIGHT * 0.10);
+}
+
+// ─── Ski tracks ───────────────────────────────────────────────────────────────
+
+function updateSkiTracks() {
+    if (gameState !== 'playing' && gameState !== 'jumping') return;
+    // Record player position every 3 frames (throttled by checking length)
+    skiTracks.push({ x: skier.x, y: skier.y, angle: skier.angle });
+    // Scroll existing tracks with the world
+    for (let i = skiTracks.length - 1; i >= 0; i--) {
+        skiTracks[i].y -= speed;
+        if (skiTracks[i].y < -10) skiTracks.splice(i, 1);
+    }
+    // Cap to last 120 positions (~2 seconds of trail)
+    if (skiTracks.length > 120) skiTracks.splice(0, skiTracks.length - 120);
+}
+
+function drawSkiTracks() {
+    if (skiTracks.length < 3) return;
+    const trackSpread = 5; // half-width between the two track lines
+    ctx.save();
+    ctx.lineWidth = 1.5;
+    for (let t = 0; t < 2; t++) {
+        const side = t === 0 ? -1 : 1;
+        ctx.beginPath();
+        let first = true;
+        skiTracks.forEach((pt, idx) => {
+            const alpha = idx / skiTracks.length; // fades toward oldest
+            if (first) {
+                ctx.strokeStyle = `rgba(180, 205, 230, ${alpha * 0.45})`;
+                ctx.beginPath();
+                first = false;
+            }
+            const perp = pt.angle * trackSpread;
+            ctx.lineTo(pt.x + side * trackSpread + perp, pt.y);
+        });
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+
+// ─── Screen shake ─────────────────────────────────────────────────────────────
+
+function triggerScreenShake(magnitude) {
+    screenShakeMag = Math.max(screenShakeMag, magnitude);
+}
+
+// ─── Snow spray particles ─────────────────────────────────────────────────────
+
+function emitSpray() {
+    if (gameState !== 'playing' && gameState !== 'jumping') return;
+    if (Math.abs(skier.angle) < 0.35) return;
+    const dir = skier.angle > 0 ? -1 : 1;
+    const count = Math.floor(Math.abs(skier.angle) * 2.5) + 1;
+    for (let i = 0; i < count; i++) {
+        sprayParticles.push({
+            x: skier.x + (Math.random() - 0.5) * 12,
+            y: skier.y + 8 + Math.random() * 6,
+            vx: dir * (Math.random() * 3.5 + 0.8),
+            vy: (Math.random() - 0.6) * 1.5,
+            life: 0.85 + Math.random() * 0.15,
+            size: Math.random() * 2.8 + 0.8
+        });
+    }
+}
+
+function updateSpray() {
+    for (let i = sprayParticles.length - 1; i >= 0; i--) {
+        const p = sprayParticles[i];
+        p.x  += p.vx;
+        p.y  += p.vy - speed * 0.5;  // scroll with the world
+        p.vx *= 0.88;
+        p.vy += 0.08;
+        p.life -= 0.055;
+        if (p.life <= 0) sprayParticles.splice(i, 1);
+    }
+}
+
+function drawSprayParticles() {
+    sprayParticles.forEach(p => {
+        const a = Math.max(0, p.life);
+        ctx.fillStyle = `rgba(220, 238, 255, ${a})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y - jumpHeight, p.size * p.life, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
+
+// ─── Speed lines ──────────────────────────────────────────────────────────────
+
+function updateSpeedLines() {
+    speedLines.forEach(line => {
+        line.y -= speed * line.speed * 1.6;
+        if (line.y < -line.length) {
+            line.y = GAME_HEIGHT + 10;
+            line.x = Math.random() * GAME_WIDTH;
+            line.length = Math.random() * 60 + 20;
+        }
+    });
+}
+
+function drawSpeedLines() {
+    if (speed < 8) return;
+    const intensity = Math.min(1, (speed - 8) / 6);
+    ctx.save();
+    speedLines.forEach(line => {
+        // Only draw in the peripheral zones (skip 25%–75% horizontally)
+        const nx = line.x / GAME_WIDTH;
+        if (nx > 0.22 && nx < 0.78) return;
+        const edgeFactor = nx < 0.5
+            ? (0.22 - nx) / 0.22
+            : (nx - 0.78) / 0.22;
+        const alpha = intensity * Math.max(0, edgeFactor) * 0.38;
+        ctx.strokeStyle = `rgba(200, 218, 238, ${alpha})`;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(line.x, line.y);
+        ctx.lineTo(line.x, line.y + line.length);
+        ctx.stroke();
+    });
+    ctx.restore();
+}
+
+// ─── Yeti danger vignette ─────────────────────────────────────────────────────
+
+function drawYetiVignette() {
+    if (!yeti.active || yeti.frozen || yeti.stunned) return;
+    const dx = skier.x - yeti.x;
+    const dy = skier.y - yeti.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const maxDist = 380;
+    if (dist >= maxDist) return;
+
+    const proximity = 1 - dist / maxDist;
+    const pulse = 0.55 + 0.45 * Math.sin(Date.now() / 180);
+    const alpha = proximity * pulse * 0.50;
+
+    const grad = ctx.createRadialGradient(
+        GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_HEIGHT * 0.18,
+        GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_HEIGHT * 0.85
+    );
+    grad.addColorStop(0,   `rgba(120, 0, 0, 0)`);
+    grad.addColorStop(0.7, `rgba(139, 0, 0, ${alpha * 0.4})`);
+    grad.addColorStop(1,   `rgba(160, 0, 0, ${alpha})`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+}
+
+// ─── Floating feedback texts ──────────────────────────────────────────────────
+
+const POWERUP_DISPLAY_NAMES = {
+    boost: '⚡ BOOST!', snowball: '❄ SNOWBALL!', shield: '🛡 SHIELD!',
+    freeze: '🧊 FREEZE!', bomb: '💣 BOMB!'
+};
+const POWERUP_TEXT_COLORS = {
+    boost: '#FFD700', snowball: '#87CEEB', shield: '#00FF7F',
+    freeze: '#00BFFF', bomb: '#FF6347'
+};
+
+function spawnFloatingText(x, y, text, color, size) {
+    floatingTexts.push({
+        x, y, text, color,
+        size: size || 14,
+        life: 1.0,
+        vy: -1.8
+    });
+}
+
+function updateFloatingTexts() {
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        const t = floatingTexts[i];
+        t.y  += t.vy;
+        t.y  -= speed * 0.5;  // scroll with the world
+        t.vy *= 0.96;          // decelerate upward drift
+        t.life -= 0.018;
+        if (t.life <= 0) floatingTexts.splice(i, 1);
+    }
+}
+
+function drawFloatingTexts() {
+    floatingTexts.forEach(t => {
+        const a = Math.max(0, t.life);
+        ctx.save();
+        ctx.globalAlpha = a;
+        ctx.font = `bold ${t.size}px "Orbitron", monospace`;
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.strokeText(t.text, t.x, t.y);
+        ctx.fillStyle = t.color;
+        ctx.fillText(t.text, t.x, t.y);
+        ctx.restore();
+    });
+}
+
 // ─── Collision detection ──────────────────────────────────────────────────────
 
 function checkCollision(obj) {
@@ -1053,6 +1358,7 @@ function shootPistol(direction) {
     const cfg = getGunConfig();
     if (pistolCooldown > 0) return;
     pistolCooldown = cfg.cooldown;
+    sfxShoot();
 
     const dirSign = direction === 'backward' ? -1 : 1;
     const bulletSpeed = cfg.speed;
@@ -1439,8 +1745,10 @@ function drawMobileButtons() {
 // ─── Update ───────────────────────────────────────────────────────────────────
 
 function update() {
-    // Always animate snow (even on menus)
+    // Always animate snow and screen-shake decay (even on menus / game-over)
     updateSnow();
+    if (screenShakeMag > 0.4) screenShakeMag *= 0.82;
+    else screenShakeMag = 0;
 
     if (gameState === 'charselect' || gameState === 'crashed' || gameState === 'caught') return;
 
@@ -1499,6 +1807,8 @@ function update() {
             jumpHeight = 0; jumpVelocity = 0;
             flipActive = false; flipRotation = 0;
             gameState = 'playing';
+            triggerScreenShake(6);
+            sfxJumpLand();
         }
     }
 
@@ -1508,6 +1818,27 @@ function update() {
 
     // Distance
     distance += speed * 0.5;
+
+    // Parallax scroll offsets
+    parallaxFarOffset  += speed * 0.08;
+    parallaxNearOffset += speed * 0.28;
+
+    // Effect updates
+    emitSpray();
+    updateSpray();
+    updateSpeedLines();
+    updateSkiTracks();
+    updateFloatingTexts();
+
+    // Milestone floating text + fanfare
+    while (nextMilestoneIdx < MILESTONES.length && distance >= MILESTONES[nextMilestoneIdx]) {
+        const m = MILESTONES[nextMilestoneIdx];
+        const label = m >= 5000 ? `${m}m — YETI INCOMING!` : `${m}m!`;
+        const col   = m >= 5000 ? '#FF4444' : '#FFD700';
+        spawnFloatingText(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 60, label, col, 16);
+        if (m < 5000) sfxMilestone(); else sfxYetiGrowl();
+        nextMilestoneIdx++;
+    }
 
     // Difficulty ramp: sparse start, full density by 1200 m
     difficulty = Math.min(1.0, 0.25 + (distance / 1200) * 0.75);
@@ -1543,8 +1874,12 @@ function update() {
 
     // Collect power-ups – auto-apply gun upgrade on pickup
     for (let i = powerupPickups.length - 1; i >= 0; i--) {
-        if (checkPowerupCollision(powerupPickups[i])) {
-            applyGunUpgrade(powerupPickups[i].type);
+        const pu = powerupPickups[i];
+        if (checkPowerupCollision(pu)) {
+            applyGunUpgrade(pu.type);
+            const label = POWERUP_DISPLAY_NAMES[pu.type] || pu.type.toUpperCase() + '!';
+            spawnFloatingText(pu.x, pu.y - 20, label, POWERUP_TEXT_COLORS[pu.type] || '#FFD700', 13);
+            sfxPickup();
             powerupPickups.splice(i, 1);
         }
     }
@@ -1553,10 +1888,13 @@ function update() {
     for (const obs of obstacles) {
         if (checkCollision(obs)) {
             if (obs.type === 'jump') {
-                if (jumpHeight === 0) { jumpVelocity = 12; gameState = 'jumping'; }
+                if (jumpHeight === 0) { jumpVelocity = 12; gameState = 'jumping'; sfxJumpLaunch(); startWind(); }
             } else if (gunUpgrade !== 'shield') {
                 gameState = 'crashed'; speed = 0;
                 checkAndSaveHighScore();
+                triggerScreenShake(14);
+                spawnFloatingText(skier.x, skier.y - 35, 'CRASH!', '#FF4444', 20);
+                sfxCrash();
             }
         }
     }
@@ -1576,7 +1914,7 @@ function update() {
                 if (proj.blast > 0) {
                     detonateArea(proj.x, proj.y, proj.blast, proj.yetiStun, proj.yetiFreeze);
                 } else {
-                    if (proj.yetiFreeze > 0) { yeti.frozen = true; yeti.frozenTimer = proj.yetiFreeze; }
+                    if (proj.yetiFreeze > 0) { yeti.frozen = true; yeti.frozenTimer = proj.yetiFreeze; sfxFreeze(); }
                     if (proj.yetiStun > 0)   { yeti.stunned = true; yeti.stunnedTimer = proj.yetiStun; }
                 }
                 removeProj = true;
@@ -1656,6 +1994,9 @@ function update() {
             gameState = 'eating';
             eatingAnimFrame = 0;
             checkAndSaveHighScore();
+            triggerScreenShake(22);
+            sfxCrash();
+            sfxYetiGrowl();
         }
     }
 }
@@ -1669,9 +2010,22 @@ function render() {
         return;
     }
 
-    // Snow background – cool white with slight blue tint
-    ctx.fillStyle = '#E8ECF2';
-    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    // ── Screen shake transform ────────────────────────────────────────────────
+    ctx.save();
+    if (screenShakeMag > 0.4) {
+        const sx = (Math.random() - 0.5) * screenShakeMag;
+        const sy = (Math.random() - 0.5) * screenShakeMag;
+        ctx.translate(sx, sy);
+    }
+
+    // Parallax gradient background (replaces flat fill)
+    drawBackground();
+
+    // Ski tracks (drawn on snow surface before obstacles)
+    drawSkiTracks();
+
+    // Speed lines (peripheral streak effect at high velocity)
+    drawSpeedLines();
 
     // Obstacles (sorted by depth)
     const sorted = [...obstacles].sort((a, b) => a.y - b.y);
@@ -1699,16 +2053,28 @@ function render() {
     // Skier / Snowboarder (hidden during eating animation – animation draws its own)
     if (gameState !== 'eating') drawSkier();
 
+    // Snow spray (on top of character so it reads as kicked-up snow)
+    drawSprayParticles();
+
     // Yeti (same – eating animation draws its own modified version)
     if (gameState !== 'eating') drawYeti();
 
     // Yeti eating animation
     if (gameState === 'eating') drawEatingAnimation();
 
-    // Snow
+    // Snow (foreground layer)
     drawSnow();
 
-    // HUD
+    // Yeti danger vignette (before HUD so HUD stays readable)
+    drawYetiVignette();
+
+    // Floating feedback texts
+    drawFloatingTexts();
+
+    // End shake transform
+    ctx.restore();
+
+    // HUD (outside shake so it stays stable)
     drawGunHUD();
     drawMobileButtons();
 
@@ -1785,6 +2151,15 @@ function resetGame() {
     tombstoneObj = null;
     highScore = parseInt(localStorage.getItem('frostbyte_highscore') || '0', 10);
     highScoreX = parseInt(localStorage.getItem('frostbyte_highscore_x') || String(GAME_WIDTH / 2), 10);
+    // Reset visual effect state
+    screenShakeMag     = 0;
+    sprayParticles     = [];
+    floatingTexts      = [];
+    skiTracks          = [];
+    nextMilestoneIdx   = 0;
+    parallaxFarOffset  = 0;
+    parallaxNearOffset = 0;
+    initSpeedLines();
     initObstacles();
 }
 
@@ -1798,6 +2173,7 @@ function selectCharacter(type) {
 
 function gameLoop() {
     update();
+    updateSounds();
     render();
     requestAnimationFrame(gameLoop);
 }
@@ -1805,6 +2181,7 @@ function gameLoop() {
 // ─── Keyboard input ───────────────────────────────────────────────────────────
 
 document.addEventListener('keydown', e => {
+    startWind();  // unblock AudioContext on first key press
     if (gameState === 'charselect') {
         if (e.key === '1') { selectCharacter('skier'); return; }
         if (e.key === '2') { selectCharacter('snowboarder'); return; }
@@ -1853,6 +2230,7 @@ canvas.addEventListener('mousemove', e => {
 });
 
 canvas.addEventListener('click', e => {
+    startWind();  // unblock AudioContext on first click/tap
     if (gameState === 'charselect') {
         const rect = canvas.getBoundingClientRect();
         const clickX = (e.clientX - rect.left) / scale;
@@ -1951,8 +2329,226 @@ canvas.addEventListener('touchend', e => {
     }
 }, { passive: false });
 
+// ─── Web Audio sound engine ───────────────────────────────────────────────────
+//
+// Procedural synthesis only – no audio files needed.
+// AudioContext is created lazily on first user gesture to satisfy browser policy.
+
+let audioCtx = null;
+
+function getAudioCtx() {
+    if (!audioCtx) {
+        try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+            audioCtx = null;
+        }
+    }
+    return audioCtx;
+}
+
+// Generic helpers ─────────────────────────────────────────────────────────────
+
+function playTone(freq, type, attack, sustain, release, gainPeak, detune) {
+    const ac = getAudioCtx(); if (!ac) return;
+    const osc  = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.type      = type || 'sine';
+    osc.frequency.value = freq;
+    if (detune) osc.detune.value = detune;
+    const now = ac.currentTime;
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(gainPeak, now + attack);
+    gain.gain.setValueAtTime(gainPeak, now + attack + sustain);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + attack + sustain + release);
+    osc.start(now);
+    osc.stop(now + attack + sustain + release + 0.01);
+}
+
+function playNoise(duration, gainPeak, highpass, lowpass) {
+    const ac = getAudioCtx(); if (!ac) return;
+    const bufLen = Math.ceil(ac.sampleRate * duration);
+    const buf    = ac.createBuffer(1, bufLen, ac.sampleRate);
+    const data   = buf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+
+    const src  = ac.createBufferSource();
+    src.buffer = buf;
+
+    const gain = ac.createGain();
+    const now  = ac.currentTime;
+    gain.gain.setValueAtTime(gainPeak, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    let node = src;
+    if (highpass) {
+        const hp = ac.createBiquadFilter();
+        hp.type = 'highpass'; hp.frequency.value = highpass;
+        node.connect(hp); node = hp;
+    }
+    if (lowpass) {
+        const lp = ac.createBiquadFilter();
+        lp.type = 'lowpass'; lp.frequency.value = lowpass;
+        node.connect(lp); node = lp;
+    }
+    node.connect(gain); gain.connect(ac.destination);
+    src.start(now); src.stop(now + duration + 0.01);
+}
+
+// Named sound effects ─────────────────────────────────────────────────────────
+
+function sfxShoot() {
+    // Short snappy pop – higher for boost, same base otherwise
+    const freq = gunUpgrade === 'boost' ? 520 : gunUpgrade === 'snowball' ? 300 : 420;
+    playTone(freq, 'square', 0.002, 0.04, 0.08, 0.18);
+    playNoise(0.07, 0.07, 2000, 8000);
+}
+
+function sfxPickup() {
+    // Rising two-note chime, pitch varies by upgrade type
+    const base = gunUpgrade === 'bomb' ? 440
+               : gunUpgrade === 'freeze' ? 550
+               : gunUpgrade === 'shield' ? 600
+               : 660;
+    playTone(base,       'sine', 0.005, 0.06, 0.18, 0.22);
+    playTone(base * 1.5, 'sine', 0.06,  0.04, 0.22, 0.20);
+}
+
+function sfxCrash() {
+    // Impact thud + noise burst
+    playNoise(0.35, 0.55, 40, 600);
+    playTone(80,  'sawtooth', 0.002, 0.05, 0.30, 0.28);
+    playTone(120, 'sawtooth', 0.002, 0.03, 0.20, 0.15);
+}
+
+function sfxJumpLand() {
+    // Soft powder thud
+    playNoise(0.18, 0.30, 100, 900);
+    playTone(140, 'sine', 0.003, 0.02, 0.14, 0.12);
+}
+
+function sfxJumpLaunch() {
+    // Swoosh upward
+    const ac = getAudioCtx(); if (!ac) return;
+    const osc  = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.type = 'sawtooth';
+    const now = ac.currentTime;
+    osc.frequency.setValueAtTime(180, now);
+    osc.frequency.exponentialRampToValueAtTime(520, now + 0.18);
+    gain.gain.setValueAtTime(0.14, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+    osc.start(now); osc.stop(now + 0.2);
+    playNoise(0.12, 0.10, 1200, 8000);
+}
+
+function sfxYetiGrowl() {
+    // Deep low rumble with pitch wobble
+    const ac = getAudioCtx(); if (!ac) return;
+    const osc  = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.type = 'sawtooth';
+    const now = ac.currentTime;
+    osc.frequency.setValueAtTime(55, now);
+    osc.frequency.setValueAtTime(48, now + 0.12);
+    osc.frequency.setValueAtTime(62, now + 0.22);
+    osc.frequency.setValueAtTime(50, now + 0.34);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.22, now + 0.06);
+    gain.gain.setValueAtTime(0.22, now + 0.30);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
+    osc.start(now); osc.stop(now + 0.58);
+    playNoise(0.4, 0.08, 60, 400);
+}
+
+function sfxFreeze() {
+    // Icy crystalline sparkle (descending arpeggio)
+    [880, 660, 440, 330].forEach((f, i) => {
+        setTimeout(() => playTone(f, 'triangle', 0.005, 0.05, 0.18, 0.20), i * 55);
+    });
+    playNoise(0.35, 0.12, 3000, 12000);
+}
+
+function sfxMilestone() {
+    // Upward fanfare arpeggio
+    [440, 550, 660, 880].forEach((f, i) => {
+        setTimeout(() => playTone(f, 'sine', 0.005, 0.06, 0.20, 0.22), i * 70);
+    });
+}
+
+// Wind loop (runs while playing, pitch/volume scale with speed) ─────────────
+
+let windNode  = null;
+let windGain  = null;
+let windFilter = null;
+
+function startWind() {
+    const ac = getAudioCtx(); if (!ac) return;
+    if (windNode) return;
+    const bufLen = ac.sampleRate * 2;
+    const buf    = ac.createBuffer(1, bufLen, ac.sampleRate);
+    const data   = buf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+
+    windNode         = ac.createBufferSource();
+    windNode.buffer  = buf;
+    windNode.loop    = true;
+
+    windFilter = ac.createBiquadFilter();
+    windFilter.type  = 'bandpass';
+    windFilter.frequency.value = 400;
+    windFilter.Q.value = 0.8;
+
+    windGain = ac.createGain();
+    windGain.gain.value = 0;
+
+    windNode.connect(windFilter);
+    windFilter.connect(windGain);
+    windGain.connect(ac.destination);
+    windNode.start();
+}
+
+function updateWindSound() {
+    if (!windGain || !windFilter || !audioCtx) return;
+    if (gameState !== 'playing' && gameState !== 'jumping') {
+        windGain.gain.value = 0;
+        return;
+    }
+    const t = Math.max(0, (speed - 3) / 12);        // 0 at slow, 1 at max speed
+    windGain.gain.value        = t * 0.055;
+    windFilter.frequency.value = 300 + t * 900;      // pitch rises with speed
+}
+
+function stopWind() {
+    if (windNode) { try { windNode.stop(); } catch(e) {} windNode = null; }
+    windGain = null; windFilter = null;
+}
+
+// Sound triggers wired into existing game events ─────────────────────────────
+
+// Yeti growl throttle (don't spam every frame)
+let yetiGrowlCooldown = 0;
+
+function updateSounds() {
+    updateWindSound();
+    if (yetiGrowlCooldown > 0) yetiGrowlCooldown--;
+
+    // Periodic Yeti growl when chasing and nearby
+    if (yeti.active && !yeti.frozen && !yeti.stunned && yetiGrowlCooldown <= 0) {
+        const dx = skier.x - yeti.x, dy = skier.y - yeti.y;
+        if (Math.sqrt(dx*dx + dy*dy) < 320) {
+            sfxYetiGrowl();
+            yetiGrowlCooldown = 180 + Math.floor(Math.random() * 120);
+        }
+    }
+}
+
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
 initSnow();
+initSpeedLines();
 initObstacles();
 gameLoop();
