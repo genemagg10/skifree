@@ -1671,8 +1671,8 @@ function drawMobileButtons() {
         ctx.restore();
     };
 
-    drawShootBtn(GAME_WIDTH - 110, GAME_HEIGHT - 38, '\u25C4', '#FF8800');
-    drawShootBtn(GAME_WIDTH - 44,  GAME_HEIGHT - 38, '\u25BA', '#FF4400');
+    drawShootBtn(GAME_WIDTH - 110, GAME_HEIGHT - 38, '\u25B2', '#FF8800');
+    drawShootBtn(GAME_WIDTH - 44,  GAME_HEIGHT - 38, '\u25BC', '#FF4400');
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
@@ -2444,8 +2444,8 @@ function updateWindSound() {
         windGain.gain.value = 0;
         return;
     }
-    const t = Math.max(0, (speed - 3) / 12);        // 0 at slow, 1 at max speed
-    windGain.gain.value        = t * 0.055;
+    const t = Math.max(0, (speed - 2) / 13);        // 0 at idle, 1 at top speed
+    windGain.gain.value        = 0.08 + t * 0.28;   // always softly audible, louder at speed
     windFilter.frequency.value = 300 + t * 900;      // pitch rises with speed
 }
 
